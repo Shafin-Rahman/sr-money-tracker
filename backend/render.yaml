@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: sr-money-tracker
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        value: file:./data/money-tracker.db

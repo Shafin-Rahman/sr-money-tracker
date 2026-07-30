@@ -1,0 +1,92 @@
+import { getSqlite } from '../db/index.js';
+import { now, generateId } from '../utils/helpers.js';
+
+export function list(req, res) {
+  const db = getSqlite();
+  const goals = db.prepare('SELECT * FROM savings_goals WHERE is_active = 1 ORDER BY created_at DESC').all();
+
+  goals.forEach((g) => {
+    g.progress = g.targetAmount > 0 ? Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100)) : 0;
+    g.remaining = Math.max(0, g.targetAmount - g.currentAmount);
+  });
+
+  res.json(goals);
+}
+
+export function getById(req, res) {
+  const db = getSqlite();
+  const goal = db.prepare('SELECT * FROM savings_goals WHERE id = ?').get(req.params.id);
+  if (!goal) return res.status(404).json({ error: 'Savings goal not found' });
+
+  goal.progress = goal.targetAmount > 0 ? Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100)) : 0;
+  goal.remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
+  res.json(goal);
+}
+
+export function create(req, res) {
+  const db = getSqlite();
+  const id = generateId();
+  const timestamp = now();
+
+  const { name, targetAmount, currentAmount, accountId, deadline, icon, color, notes } = req.body;
+
+  db.prepare(`INSERT INTO savings_goals (id, name, target_amount, current_amount, account_id, deadline, icon, color, notes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    id, name, targetAmount, currentAmount || 0, accountId || null,
+    deadline || null, icon || 'piggy-bank', color || '#6366f1', notes || null, timestamp, timestamp
+  );
+
+  const goal = db.prepare('SELECT * FROM savings_goals WHERE id = ?').get(id);
+  res.status(201).json(goal);
+}
+
+export function update(req, res) {
+  const db = getSqlite();
+  const timestamp = now();
+  const existing = db.prepare('SELECT * FROM savings_goals WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Savings goal not found' });
+
+  const { name, targetAmount, currentAmount, accountId, deadline, icon, color, notes, isActive } = req.body;
+
+  db.prepare(`UPDATE savings_goals SET
+    name = COALESCE(?, name), target_amount = COALESCE(?, target_amount),
+    current_amount = COALESCE(?, current_amount), account_id = ?,
+    deadline = COALESCE(?, deadline), icon = COALESCE(?, icon),
+    color = COALESCE(?, color), notes = COALESCE(?, notes),
+    is_active = COALESCE(?, is_active), updated_at = ? WHERE id = ?`).run(
+    name || null, targetAmount || null, currentAmount || null,
+    accountId !== undefined ? accountId : existing.account_id,
+    deadline || null, icon || null, color || null, notes !== undefined ? notes : existing.notes,
+    isActive !== undefined ? (isActive ? 1 : 0) : null, timestamp, req.params.id
+  );
+
+  const goal = db.prepare('SELECT * FROM savings_goals WHERE id = ?').get(req.params.id);
+  res.json(goal);
+}
+
+export function remove(req, res) {
+  const db = getSqlite();
+  const existing = db.prepare('SELECT * FROM savings_goals WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Savings goal not found' });
+  db.prepare('DELETE FROM savings_goals WHERE id = ?').run(req.params.id);
+  res.json({ message: 'Savings goal deleted' });
+}
+
+export function addFunds(req, res) {
+  const db = getSqlite();
+  const timestamp = now();
+  const existing = db.prepare('SELECT * FROM savings_goals WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Savings goal not found' });
+
+  const { amount } = req.body;
+  if (!amount || amount <= 0) return res.status(400).json({ error: 'Amount must be positive' });
+
+  const newAmount = existing.currentAmount + amount;
+  db.prepare('UPDATE savings_goals SET current_amount = ?, updated_at = ? WHERE id = ?').run(newAmount, timestamp, req.params.id);
+
+  if (existing.account_id) {
+    db.prepare('UPDATE accounts SET current_balance = current_balance - ?, updated_at = ? WHERE id = ?').run(amount, timestamp, existing.account_id);
+  }
+
+  res.json({ message: 'Funds added', currentAmount: newAmount });
+}
