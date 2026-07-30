@@ -6,4 +6,6 @@ dist/
 *.sqlite
 *.sqlite3
 backend/drizzle/migrations/
+backend/data/*.db*
 personal.txt
+CHAT_HISTORY.md

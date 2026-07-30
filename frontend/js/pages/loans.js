@@ -1,6 +1,6 @@
 import { $, $$, formatCurrency, formatDate, today } from '../utils.js';
 import { api } from '../api.js';
-import { openModal, closeModal } from '../app.js';
+import { openModal, closeModal, signalRefresh } from '../app.js';
 
 export async function render() {
   const container = document.getElementById('pageContent');
@@ -28,7 +28,7 @@ export async function render() {
     });
   });
 
-  document.getElementById('addLoanBtn').addEventListener('click', showLoanForm);
+  document.getElementById('addLoanBtn').addEventListener('click', () => showLoanForm());
 
   await loadLoans();
 }
@@ -89,6 +89,7 @@ async function loadLoans(type = '') {
         if (confirm('Delete this loan and all payments?')) {
           try {
             await api.deleteLoan(btn.dataset.id);
+            signalRefresh();
             showToast('Loan deleted', 'success');
             await loadLoans(currentType);
           } catch (err) { showToast(err.message, 'error'); }
@@ -170,6 +171,7 @@ async function showLoanForm(id = null) {
         await api.createLoan(data);
         showToast('Loan created', 'success');
       }
+      signalRefresh();
       closeModal();
       await loadLoans();
     } catch (err) { showToast(err.message, 'error'); }
@@ -222,6 +224,7 @@ async function showPaymentForm(loanId) {
 
     try {
       await api.addLoanPayment(loanId, data);
+      signalRefresh();
       showToast('Payment added', 'success');
       closeModal();
       await loadLoans();

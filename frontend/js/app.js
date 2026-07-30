@@ -16,6 +16,10 @@ import * as recurring from './pages/recurring.js';
 // App State
 let currentPage = 'dashboard';
 
+export function signalRefresh() {
+  window.dispatchEvent(new CustomEvent('data-changed'));
+}
+
 // Modal functions
 export function openModal({ title, body, footer, large = false }) {
   const overlay = document.getElementById('modalOverlay');
@@ -285,6 +289,27 @@ router.register('savings', async () => {
 router.register('recurring', async () => {
   currentPage = 'recurring';
   await recurring.render();
+});
+
+// Auto-refresh on data change
+const _pageRefresh = debounce(async (page) => {
+  const handlers = {
+    dashboard: () => dashboard.render(),
+    accounts: () => accounts.render(),
+    transactions: () => transactions.render(),
+    categories: () => categories.render(),
+    loans: () => loans.render(),
+    budgets: () => budgets.render(),
+    savings: () => savings.render(),
+    recurring: () => recurring.render(),
+    reports: () => reports.render(),
+    settings: () => settings.render(),
+  };
+  if (handlers[page]) await handlers[page]();
+}, 100);
+
+window.addEventListener('data-changed', () => {
+  _pageRefresh(router.currentPage);
 });
 
 // Auto-translate page on language change

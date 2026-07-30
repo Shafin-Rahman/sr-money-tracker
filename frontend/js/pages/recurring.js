@@ -1,6 +1,6 @@
 import { $, $$, formatCurrency, formatDate, today } from '../utils.js';
 import { api } from '../api.js';
-import { openModal, closeModal } from '../app.js';
+import { openModal, closeModal, signalRefresh } from '../app.js';
 
 export async function render() {
   const container = document.getElementById('pageContent');
@@ -13,7 +13,7 @@ export async function render() {
     <div id="billsList"><div class="empty-state"><i class="fas fa-calendar-repeat"></i><h3>Loading bills...</h3></div></div>
   `;
 
-  document.getElementById('addBillBtn').addEventListener('click', showBillForm);
+  document.getElementById('addBillBtn').addEventListener('click', () => showBillForm());
   await loadBills();
 }
 
@@ -66,7 +66,7 @@ async function loadBills() {
     list.querySelectorAll('.delete-bill').forEach((btn) => {
       btn.addEventListener('click', async () => {
         if (confirm('Delete this recurring bill?')) {
-          try { await api.deleteRecurringBill(btn.dataset.id); showToast('Bill deleted', 'success'); await loadBills(); }
+          try { await api.deleteRecurringBill(btn.dataset.id); signalRefresh(); showToast('Bill deleted', 'success'); await loadBills(); }
           catch (err) { showToast(err.message, 'error'); }
         }
       });
@@ -169,7 +169,7 @@ async function showBillForm(id = null) {
     try {
       if (id) { await api.updateRecurringBill(id, data); showToast('Bill updated', 'success'); }
       else { await api.createRecurringBill(data); showToast('Bill created', 'success'); }
-      closeModal(); await loadBills();
+      signalRefresh(); closeModal(); await loadBills();
     } catch (err) { showToast(err.message, 'error'); }
   });
 }

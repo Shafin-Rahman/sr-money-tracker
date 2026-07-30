@@ -1,6 +1,6 @@
 import { $, $$, formatCurrency, formatDate, today } from '../utils.js';
 import { api } from '../api.js';
-import { openModal, closeModal } from '../app.js';
+import { openModal, closeModal, signalRefresh } from '../app.js';
 
 export async function render() {
   const container = document.getElementById('pageContent');
@@ -13,7 +13,7 @@ export async function render() {
     <div id="goalsList"><div class="empty-state"><i class="fas fa-piggy-bank"></i><h3>Loading goals...</h3></div></div>
   `;
 
-  document.getElementById('addGoalBtn').addEventListener('click', showGoalForm);
+  document.getElementById('addGoalBtn').addEventListener('click', () => showGoalForm());
   await loadGoals();
 }
 
@@ -71,7 +71,7 @@ async function loadGoals() {
     list.querySelectorAll('.delete-goal').forEach((btn) => {
       btn.addEventListener('click', async () => {
         if (confirm('Delete this savings goal?')) {
-          try { await api.deleteSavingsGoal(btn.dataset.id); showToast('Goal deleted', 'success'); await loadGoals(); }
+          try { await api.deleteSavingsGoal(btn.dataset.id); signalRefresh(); showToast('Goal deleted', 'success'); await loadGoals(); }
           catch (err) { showToast(err.message, 'error'); }
         }
       });
@@ -174,7 +174,7 @@ async function showGoalForm(id = null) {
     try {
       if (id) { await api.updateSavingsGoal(id, data); showToast('Goal updated', 'success'); }
       else { await api.createSavingsGoal(data); showToast('Goal created', 'success'); }
-      closeModal(); await loadGoals();
+      signalRefresh(); closeModal(); await loadGoals();
     } catch (err) { showToast(err.message, 'error'); }
   });
 }
@@ -210,6 +210,7 @@ async function showAddFundsForm(goalId) {
     if (!amount || amount <= 0) { showToast('Enter a valid amount', 'error'); return; }
     try {
       await api.addSavingsFunds(goalId, { amount });
+      signalRefresh();
       showToast('Funds added!', 'success');
       closeModal(); await loadGoals();
     } catch (err) { showToast(err.message, 'error'); }

@@ -1,6 +1,6 @@
 import { $, $$, randomColor } from '../utils.js';
 import { api } from '../api.js';
-import { openModal, closeModal } from '../app.js';
+import { openModal, closeModal, signalRefresh } from '../app.js';
 
 export async function render() {
   const container = document.getElementById('pageContent');
@@ -77,6 +77,7 @@ async function loadCategories(type) {
         if (confirm('Delete this category? Transactions will be uncategorized.')) {
           try {
             await api.deleteCategory(btn.dataset.id);
+            signalRefresh();
             showToast('Category deleted', 'success');
             await loadCategories(type);
           } catch (err) {
@@ -185,6 +186,7 @@ async function showCategoryForm(id = null, type = 'income', parentId = null) {
         await api.createCategory(data);
         showToast('Category created', 'success');
       }
+      signalRefresh();
       closeModal();
       await loadCategories(type);
     } catch (err) {

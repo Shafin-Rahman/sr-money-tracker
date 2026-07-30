@@ -1,6 +1,6 @@
 import { $, $$, formatCurrency, formatDate, today, currentMonth } from '../utils.js';
 import { api } from '../api.js';
-import { openModal, closeModal } from '../app.js';
+import { openModal, closeModal, signalRefresh } from '../app.js';
 
 export async function render() {
   const container = document.getElementById('pageContent');
@@ -12,7 +12,7 @@ export async function render() {
     <div id="budgetsList"><div class="empty-state"><i class="fas fa-chart-line"></i><h3>Loading budgets...</h3></div></div>
   `;
 
-  document.getElementById('addBudgetBtn').addEventListener('click', showBudgetForm);
+  document.getElementById('addBudgetBtn').addEventListener('click', () => showBudgetForm());
 
   await loadBudgets();
 }
@@ -67,7 +67,7 @@ async function loadBudgets() {
     list.querySelectorAll('.delete-budget').forEach((btn) => {
       btn.addEventListener('click', async () => {
         if (confirm('Delete this budget?')) {
-          try { await api.deleteBudget(btn.dataset.id); showToast('Budget deleted', 'success'); await loadBudgets(); }
+          try { await api.deleteBudget(btn.dataset.id); signalRefresh(); showToast('Budget deleted', 'success'); await loadBudgets(); }
           catch (err) { showToast(err.message, 'error'); }
         }
       });
@@ -147,6 +147,7 @@ async function showBudgetForm(id = null) {
     try {
       if (id) { await api.updateBudget(id, data); showToast('Budget updated', 'success'); }
       else { await api.createBudget(data); showToast('Budget created', 'success'); }
+      signalRefresh();
       closeModal();
       await loadBudgets();
     } catch (err) { showToast(err.message, 'error'); }

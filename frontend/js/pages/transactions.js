@@ -1,6 +1,6 @@
 import { $, $$, formatCurrency, formatDate, formatTime, today, currentTime, currentMonth } from '../utils.js';
 import { api } from '../api.js';
-import { openModal, closeModal } from '../app.js';
+import { openModal, closeModal, signalRefresh } from '../app.js';
 
 let currentFilter = { page: 1, limit: 50 };
 
@@ -48,7 +48,7 @@ export async function render() {
     loadTransactions();
   });
 
-  document.getElementById('addTxnBtn').addEventListener('click', showTransactionForm);
+  document.getElementById('addTxnBtn').addEventListener('click', () => showTransactionForm());
 
   await loadTransactions();
 }
@@ -120,6 +120,7 @@ async function loadTransactions() {
       btn.addEventListener('click', async () => {
         try {
           await api.duplicateTransaction(btn.dataset.id);
+          signalRefresh();
           showToast('Transaction duplicated', 'success');
           await loadTransactions();
         } catch (err) { showToast(err.message, 'error'); }
@@ -130,6 +131,7 @@ async function loadTransactions() {
         if (confirm('Remove this transaction?')) {
           try {
             await api.deleteTransaction(btn.dataset.id);
+            signalRefresh();
             showToast('Transaction removed', 'success');
             await loadTransactions();
           } catch (err) { showToast(err.message, 'error'); }
@@ -261,6 +263,7 @@ async function showTransactionForm(id = null) {
         await api.createTransaction(data);
         showToast('Transaction created', 'success');
       }
+      signalRefresh();
       closeModal();
       await loadTransactions();
     } catch (err) { showToast(err.message, 'error'); }

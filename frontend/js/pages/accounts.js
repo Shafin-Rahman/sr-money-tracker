@@ -1,6 +1,6 @@
 import { $, $$, formatCurrency, formatDate, randomColor } from '../utils.js';
 import { api } from '../api.js';
-import { openModal, closeModal } from '../app.js';
+import { openModal, closeModal, signalRefresh } from '../app.js';
 
 export async function render() {
   const container = document.getElementById('pageContent');
@@ -12,7 +12,7 @@ export async function render() {
     <div id="accountsList"><div class="empty-state"><i class="fas fa-wallet"></i><h3>Loading accounts...</h3></div></div>
   `;
 
-  document.getElementById('addAccountBtn').addEventListener('click', showAccountForm);
+  document.getElementById('addAccountBtn').addEventListener('click', () => showAccountForm());
 
   await loadAccounts();
 }
@@ -55,6 +55,7 @@ async function loadAccounts() {
         if (confirm('Are you sure you want to delete this account?')) {
           try {
             await api.deleteAccount(btn.dataset.id);
+            signalRefresh();
             showToast('Account deleted successfully', 'success');
             await loadAccounts();
           } catch (err) {
@@ -164,6 +165,7 @@ async function showAccountForm(id = null) {
         await api.createAccount(data);
         showToast('Account created successfully', 'success');
       }
+      signalRefresh();
       closeModal();
       await loadAccounts();
     } catch (err) {
