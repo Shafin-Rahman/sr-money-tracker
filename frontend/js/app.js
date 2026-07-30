@@ -89,14 +89,22 @@ function initTheme() {
 
 // Sidebar
 function initSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+
+  function toggleSidebar(open) {
+    sidebar.classList.toggle('open', open);
+    overlay.classList.toggle('active', open);
+  }
+
   document.getElementById('sidebarToggle').addEventListener('click', () => {
-    document.getElementById('sidebar').classList.toggle('open');
+    toggleSidebar(!sidebar.classList.contains('open'));
   });
 
+  overlay.addEventListener('click', () => toggleSidebar(false));
+
   document.querySelectorAll('.nav-item').forEach((item) => {
-    item.addEventListener('click', () => {
-      document.getElementById('sidebar').classList.remove('open');
-    });
+    item.addEventListener('click', () => toggleSidebar(false));
   });
 }
 
@@ -350,4 +358,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   initModal();
   router.init();
   document.title = t('app_name');
+
+  // Register service worker for PWA
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
 });

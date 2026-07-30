@@ -48,6 +48,18 @@
   background: rgba(0, 0, 0, 0.6);
 }
 
+[data-theme="dark"] .modal-footer {
+  border-top-color: var(--border);
+}
+
+[data-theme="dark"] .modal-header {
+  background: #1a2332;
+}
+
+[data-theme="dark"] .sidebar-overlay {
+  background: rgba(0, 0, 0, 0.5);
+}
+
 [data-theme="dark"] table {
   background: transparent;
 }

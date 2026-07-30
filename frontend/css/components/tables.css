@@ -86,3 +86,29 @@ tr:hover td {
   gap: 4px;
   justify-content: flex-end;
 }
+
+/* Mobile table: hide non-essential columns, keep key info */
+@media (max-width: 768px) {
+  .table-container {
+    border-radius: var(--radius-sm);
+    margin: 0 -4px;
+  }
+  th, td {
+    padding: 10px 10px;
+    font-size: 13px;
+  }
+  .hide-mobile { display: none; }
+}
+
+@media (max-width: 480px) {
+  th, td {
+    padding: 8px 8px;
+    font-size: 12px;
+  }
+  .hide-phone { display: none; }
+  td .table-cell-icon .cell-sub { font-size: 11px; }
+  .table-cell-icon { gap: 8px; }
+  .table-cell-icon .cell-icon { width: 28px; height: 28px; font-size: 12px; }
+  .table-actions { gap: 2px; }
+  .table-amount { font-size: 13px; }
+}

@@ -72,6 +72,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 @keyframes fadeIn {
@@ -82,4 +83,75 @@
 @keyframes scaleIn {
   from { transform: scale(0.95); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
+}
+
+/* Full-screen modal on mobile */
+@media (max-width: 480px) {
+  .modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .modal {
+    max-height: 92vh;
+    max-width: 100%;
+    border-radius: var(--radius) var(--radius) 0 0;
+    animation: slideUp 0.3s ease;
+  }
+  .modal-lg {
+    max-width: 100%;
+  }
+  .modal-header {
+    padding: 16px 18px 0;
+    position: sticky;
+    top: 0;
+    background: var(--bg-primary);
+    z-index: 1;
+  }
+  .modal-body {
+    padding: 16px 18px;
+  }
+  .modal-footer {
+    padding: 0 18px 16px;
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-primary);
+    z-index: 1;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+    padding-top: 12px;
+  }
+  .modal-header h2 {
+    font-size: 16px;
+  }
+  .modal-close {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* Drag handle on top of bottom-sheet modal */
+  .modal::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    background: var(--text-tertiary);
+    border-radius: 2px;
+    margin: 8px auto 0;
+    opacity: 0.3;
+  }
+}
+
+/* Tablet */
+@media (min-width: 481px) and (max-width: 768px) {
+  .modal-overlay {
+    padding: 16px;
+  }
+  .modal-header { padding: 18px 20px 0; }
+  .modal-body { padding: 18px 20px; }
+  .modal-footer { padding: 0 20px 18px; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }

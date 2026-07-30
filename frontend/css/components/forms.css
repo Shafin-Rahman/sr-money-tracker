@@ -114,4 +114,20 @@
 
 @media (max-width: 480px) {
   .form-row { grid-template-columns: 1fr; }
+  .form-group { margin-bottom: 14px; }
+  .form-label { font-size: 12px; }
+  .form-input, .form-select, .form-textarea {
+    padding: 12px 14px;
+    font-size: 16px; /* Prevent iOS zoom on focus */
+  }
+  .form-actions { flex-direction: column-reverse; }
+  .form-actions .btn { width: 100%; justify-content: center; padding: 12px; }
+  .color-swatch { width: 36px; height: 36px; }
+  .icon-picker { grid-template-columns: repeat(6, 1fr); }
+  .icon-option { width: 42px; height: 42px; }
+}
+
+/* Prevent iOS zoom on input focus */
+@media screen and (max-width: 480px) {
+  input, select, textarea { font-size: 16px !important; }
 }

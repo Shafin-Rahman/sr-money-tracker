@@ -269,10 +269,57 @@ img { max-width: 100%; display: block; }
   .topbar { padding: 0 14px; height: 56px; }
   .topbar .search-box { display: none; }
   .topbar-right .btn span { display: none; }
+  .topbar-right .btn { padding: 8px 12px; }
   .page-content { padding: 14px; }
   .floating-btn { display: flex; }
 }
 
 @media (max-width: 480px) {
   .topbar-left h1 { font-size: 15px; }
+  .page-content { padding: 12px; }
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stats-card { padding: 14px; gap: 12px; }
+  .stats-card .stats-value { font-size: 18px; }
+  .stats-card .stats-label { font-size: 11px; }
+  .card-icon { width: 36px; height: 36px; font-size: 16px; }
+  .widget-grid { grid-template-columns: 1fr; }
+  th, td { padding: 10px 12px; font-size: 13px; }
+  .btn { padding: 8px 14px; font-size: 12px; }
+  .btn-icon { width: 32px; height: 32px; }
+  .icon-btn { width: 34px; height: 34px; }
+  .search-box input { font-size: 12px; }
+  .toast-container { left: 10px; right: 10px; top: 64px; }
+  .toast { min-width: auto; font-size: 12px; padding: 10px 14px; }
 }
+
+@media (max-width: 380px) {
+  .stats-grid { grid-template-columns: 1fr; }
+  .topbar-right .btn.btn-primary { padding: 8px 10px; }
+  .topbar-right .btn.btn-primary i { margin: 0; }
+}
+
+/* Safe area for notched phones */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .floating-btn {
+    bottom: calc(24px + env(safe-area-inset-bottom));
+    right: calc(24px + env(safe-area-inset-right));
+  }
+  .sidebar { padding-top: env(safe-area-inset-top); }
+  .page-content {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+  @media (max-width: 768px) {
+    .floating-btn {
+      bottom: calc(20px + env(safe-area-inset-bottom));
+      right: calc(20px + env(safe-area-inset-right));
+    }
+  }
+}
+
+/* Prevent text selection on UI elements */
+.nav-item, .btn, .icon-btn, .sidebar-toggle, .modal-close {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+
