@@ -1,34 +1,36 @@
 const CACHE = 'sr-money-tracker-v1';
 
+const PREFIX = '/sr-money-tracker';
+
 const PRECACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/css/style.css',
-  '/css/components/sidebar.css',
-  '/css/components/cards.css',
-  '/css/components/forms.css',
-  '/css/components/tables.css',
-  '/css/components/modal.css',
-  '/css/components/dark-mode.css',
-  '/js/app.js',
-  '/js/api.js',
-  '/js/router.js',
-  '/js/i18n.js',
-  '/js/utils.js',
-  '/js/lang/en.js',
-  '/js/lang/bn.js',
-  '/js/pages/dashboard.js',
-  '/js/pages/accounts.js',
-  '/js/pages/transactions.js',
-  '/js/pages/categories.js',
-  '/js/pages/loans.js',
-  '/js/pages/budgets.js',
-  '/js/pages/savings.js',
-  '/js/pages/recurring.js',
-  '/js/pages/reports.js',
-  '/js/pages/settings.js',
-  '/assets/icons/icon.svg',
+  PREFIX + '/',
+  PREFIX + '/index.html',
+  PREFIX + '/manifest.json',
+  PREFIX + '/css/style.css',
+  PREFIX + '/css/components/sidebar.css',
+  PREFIX + '/css/components/cards.css',
+  PREFIX + '/css/components/forms.css',
+  PREFIX + '/css/components/tables.css',
+  PREFIX + '/css/components/modal.css',
+  PREFIX + '/css/components/dark-mode.css',
+  PREFIX + '/js/app.js',
+  PREFIX + '/js/api.js',
+  PREFIX + '/js/router.js',
+  PREFIX + '/js/i18n.js',
+  PREFIX + '/js/utils.js',
+  PREFIX + '/js/lang/en.js',
+  PREFIX + '/js/lang/bn.js',
+  PREFIX + '/js/pages/dashboard.js',
+  PREFIX + '/js/pages/accounts.js',
+  PREFIX + '/js/pages/transactions.js',
+  PREFIX + '/js/pages/categories.js',
+  PREFIX + '/js/pages/loans.js',
+  PREFIX + '/js/pages/budgets.js',
+  PREFIX + '/js/pages/savings.js',
+  PREFIX + '/js/pages/recurring.js',
+  PREFIX + '/js/pages/reports.js',
+  PREFIX + '/js/pages/settings.js',
+  PREFIX + '/assets/icons/icon.svg',
 ];
 
 self.addEventListener('install', (e) => {
@@ -56,6 +58,6 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE).then((cache) => cache.put(e.request, clone));
       }
       return res;
-    }).catch(() => caches.match('/index.html')))
+    }).catch(() => caches.match(PREFIX + '/index.html')))
   );
 });
