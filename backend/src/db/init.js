@@ -249,13 +249,15 @@ let initPromise;
 
 export function ensureDatabase() {
   if (!initPromise) {
-    initPromise = (async () => {
+    const pending = (async () => {
       const pool = getPool();
       await pool.query(DDL);
       await seed();
     })();
-    initPromise.catch((err) => {
-      console.error('Database initialization failed:', err);
+    initPromise = pending.catch((err) => {
+      console.error('Database initialization failed:', err.message);
+      initPromise = null;
+      throw err;
     });
   }
   return initPromise;
