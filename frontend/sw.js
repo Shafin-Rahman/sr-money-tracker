@@ -1,4 +1,4 @@
-const CACHE = 'sr-money-tracker-v5';
+const CACHE = 'sr-money-tracker-v6';
 
 // Derive base path from the SW script location, so it works on both
 // GitHub Pages (/sr-money-tracker/) and Vercel (/).

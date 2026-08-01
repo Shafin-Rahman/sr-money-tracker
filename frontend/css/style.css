@@ -156,10 +156,27 @@ img { max-width: 100%; display: block; }
   border-bottom: 1px solid var(--border);
 }
 
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .topbar-left h1 {
   font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Mobile-only controls (shown via media query below) */
+.menu-btn,
+#mobileSearchBtn {
+  display: none;
+  flex-shrink: 0;
 }
 
 .topbar-right {
@@ -349,8 +366,14 @@ img { max-width: 100%; display: block; }
   .sidebar { transform: translateX(-100%); z-index: 200; }
   .sidebar.open { transform: translateX(0); }
   .main-content { margin-left: 0; }
-  .topbar { padding: 0 14px; height: 56px; }
-  .topbar .search-box { display: none; }
+  .topbar { padding: 0 12px; height: auto; min-height: 56px; }
+  .menu-btn, #mobileSearchBtn { display: flex; }
+  .topbar-right { gap: 6px; flex-wrap: wrap; }
+  .search-box { display: none; width: 100%; order: 9; flex: 0 0 100%; }
+  .search-box.mobile-open { display: flex; }
+  .search-box input, .search-box input:focus { width: 100%; }
+  .sync-indicator span { display: none; }
+  .sync-indicator { padding: 6px 8px; }
   .topbar-right .btn span { display: none; }
   .topbar-right .btn { padding: 8px 12px; }
   .page-content { padding: 14px; }
@@ -358,7 +381,10 @@ img { max-width: 100%; display: block; }
 }
 
 @media (max-width: 480px) {
+  .topbar { padding: 0 10px; }
   .topbar-left h1 { font-size: 15px; }
+  #themeTopBtn { display: none; }
+  .lang-btn { padding: 0 10px; }
   .page-content { padding: 12px; }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
   .stats-card { padding: 14px; gap: 12px; }
@@ -395,6 +421,13 @@ img { max-width: 100%; display: block; }
     .floating-btn {
       bottom: calc(20px + env(safe-area-inset-bottom));
       right: calc(20px + env(safe-area-inset-right));
+    }
+    .topbar {
+      min-height: calc(56px + env(safe-area-inset-top));
+      padding-top: env(safe-area-inset-top);
+    }
+    .page-content {
+      padding-bottom: calc(14px + env(safe-area-inset-bottom) + 20px);
     }
   }
 }

@@ -134,20 +134,37 @@ function initLangSwitcher() {
 function initSidebar() {
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebarOverlay');
+  const toggleBtn = document.getElementById('sidebarToggle');
+  const openBtn = document.getElementById('sidebarOpenBtn');
+  const toggleIcon = toggleBtn.querySelector('i');
 
   function toggleSidebar(open) {
     sidebar.classList.toggle('open', open);
     overlay.classList.toggle('active', open);
+    document.body.classList.toggle('sidebar-locked', open && window.innerWidth <= 768);
+    if (toggleIcon) toggleIcon.className = open ? 'fas fa-times' : 'fas fa-bars';
   }
 
-  document.getElementById('sidebarToggle').addEventListener('click', () => {
+  toggleBtn.addEventListener('click', () => {
     toggleSidebar(!sidebar.classList.contains('open'));
   });
+
+  if (openBtn) {
+    openBtn.addEventListener('click', () => toggleSidebar(true));
+  }
 
   overlay.addEventListener('click', () => toggleSidebar(false));
 
   document.querySelectorAll('.nav-item').forEach((item) => {
     item.addEventListener('click', () => toggleSidebar(false));
+  });
+
+  // Reset drawer state when resizing to desktop
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) {
+      document.body.classList.remove('sidebar-locked');
+      toggleSidebar(false);
+    }
   });
 }
 
@@ -236,6 +253,17 @@ function initSearch() {
   searchInput.addEventListener('blur', () => {
     setTimeout(() => { searchResults.style.display = 'none'; }, 200);
   });
+
+  // Mobile: toggle the full-width search row
+  const mobileSearchBtn = document.getElementById('mobileSearchBtn');
+  const searchBox = searchInput.closest('.search-box');
+  if (mobileSearchBtn && searchBox) {
+    mobileSearchBtn.addEventListener('click', () => {
+      const willOpen = !searchBox.classList.contains('mobile-open');
+      searchBox.classList.toggle('mobile-open', willOpen);
+      if (willOpen) setTimeout(() => searchInput.focus(), 0);
+    });
+  }
 }
 
 // Quick Add Transaction

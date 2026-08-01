@@ -4,6 +4,7 @@
   left: 0;
   width: var(--sidebar-width);
   height: 100vh;
+  height: 100dvh;
   background: var(--bg-primary);
   border-right: 1px solid var(--border);
   display: flex;
@@ -133,9 +134,14 @@
 }
 
 @media (max-width: 480px) {
-  .sidebar { width: 280px; }
+  .sidebar { width: min(85vw, 280px); }
   .sidebar-header { padding: 10px 14px; }
   .nav-item { padding: 11px 14px; font-size: 13px; min-height: 44px; }
   .logo { font-size: 16px; }
   .logo i { font-size: 20px; }
+}
+
+/* Lock background scroll while the mobile drawer is open */
+body.sidebar-locked {
+  overflow: hidden;
 }

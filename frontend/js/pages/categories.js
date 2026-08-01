@@ -27,10 +27,16 @@ export async function render() {
 
 async function loadCategories(type) {
   try {
-    const { categories, tree } = await api.getCategories({ type });
+    document.getElementById('showIncomeCats').classList.toggle('btn-primary', type === 'income');
+    document.getElementById('showIncomeCats').classList.toggle('btn-secondary', type !== 'income');
+    document.getElementById('showExpenseCats').classList.toggle('btn-primary', type === 'expense');
+    document.getElementById('showExpenseCats').classList.toggle('btn-secondary', type !== 'expense');
+
+    const { tree } = await api.getCategories();
+    const roots = tree.filter((cat) => cat.type === type);
     const list = document.getElementById('categoriesList');
 
-    if (categories.length === 0) {
+    if (roots.length === 0) {
       list.innerHTML = `<div class="empty-state"><i class="fas fa-tags"></i><h3>No ${type} categories</h3><p>Create your first ${type} category</p></div>`;
       return;
     }
@@ -42,7 +48,7 @@ async function loadCategories(type) {
             <div class="card-icon" style="width:36px;height:36px;font-size:14px;background:${cat.color}22;color:${cat.color}"><i class="fas fa-${cat.icon || 'circle'}"></i></div>
             <div style="flex:1">
               <div style="font-weight:500;font-size:14px">${cat.name}</div>
-              <div style="font-size:12px;color:var(--text-tertiary)">${cat.type}</div>
+              <div style="font-size:12px;color:var(--text-tertiary)">${cat.parent_id ? 'Subcategory' : cat.type.charAt(0).toUpperCase() + cat.type.slice(1)}</div>
             </div>
             <div style="display:flex;gap:4px">
               <button class="btn-icon btn-ghost edit-cat" data-id="${cat.id}" title="Edit"><i class="fas fa-edit"></i></button>
@@ -51,11 +57,11 @@ async function loadCategories(type) {
             </div>
           </div>
         </div>
-        ${cat.children ? renderTree(cat.children, depth + 1) : ''}
+        ${cat.children && cat.children.length ? renderTree(cat.children, depth + 1) : ''}
       `).join('');
     }
 
-    list.innerHTML = renderTree(tree);
+    list.innerHTML = renderTree(roots);
 
     list.querySelectorAll('.edit-cat').forEach((btn) => {
       btn.addEventListener('click', (e) => {
