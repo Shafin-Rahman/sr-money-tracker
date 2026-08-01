@@ -5,9 +5,9 @@ import { openModal, closeModal, signalRefresh } from '../app.js';
 export async function render() {
   const container = document.getElementById('pageContent');
   container.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:20px">
       <h2 style="font-size:18px;font-weight:600">Categories</h2>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" id="showIncomeCats"><i class="fas fa-arrow-down"></i> Income</button>
         <button class="btn btn-secondary btn-sm" id="showExpenseCats"><i class="fas fa-arrow-up"></i> Expense</button>
         <button class="btn btn-primary" id="addCategoryBtn"><i class="fas fa-plus"></i> Add Category</button>
@@ -47,12 +47,12 @@ async function loadCategories(type) {
           <div class="stats-card" style="padding:12px 16px;display:flex;align-items:center;gap:12px">
             <div class="card-icon" style="width:36px;height:36px;font-size:14px;background:${cat.color}22;color:${cat.color}"><i class="fas fa-${cat.icon || 'circle'}"></i></div>
             <div style="flex:1">
-              <div style="font-weight:500;font-size:14px">${cat.name}</div>
+              <div style="font-weight:500;font-size:14px">${escapeHtml(cat.name)}</div>
               <div style="font-size:12px;color:var(--text-tertiary)">${cat.parent_id ? 'Subcategory' : cat.type.charAt(0).toUpperCase() + cat.type.slice(1)}</div>
             </div>
             <div style="display:flex;gap:4px">
               <button class="btn-icon btn-ghost edit-cat" data-id="${cat.id}" title="Edit"><i class="fas fa-edit"></i></button>
-              <button class="btn-icon btn-ghost add-subcat" data-id="${cat.id}" title="Add Subcategory"><i class="fas fa-plus"></i></button>
+              ${cat.parent_id ? '' : `<button class="btn-icon btn-ghost add-subcat" data-id="${cat.id}" title="Add Subcategory"><i class="fas fa-plus"></i></button>`}
               <button class="btn-icon btn-ghost delete-cat" data-id="${cat.id}" title="Delete" style="color:var(--danger)"><i class="fas fa-trash"></i></button>
             </div>
           </div>
@@ -98,8 +98,8 @@ async function loadCategories(type) {
   }
 }
 
-async function showCategoryForm(id = null, type = 'income', parentId = null) {
-  let cat = { name: '', type, icon: 'circle', color: '#6366f1', sortOrder: 0 };
+async function showCategoryForm(id = null, type = null, parentId = null) {
+  let cat = { name: '', type: type || 'income', icon: 'circle', color: '#6366f1', sortOrder: 0 };
 
   if (id) {
     try {
@@ -110,6 +110,9 @@ async function showCategoryForm(id = null, type = 'income', parentId = null) {
     }
   }
 
+  const isSubcategory = !!(cat.parent_id || parentId);
+  const currentType = isSubcategory ? 'subcategory' : (type || cat.type || 'income');
+
   const icons = ['circle', 'utensils', 'car', 'shopping-bag', 'home', 'bolt', 'water', 'wifi', 'mobile-screen', 'cart-shopping', 'apple-whole', 'drumstick-bite', 'heart', 'stethoscope', 'baby', 'graduation-cap', 'bus', 'gas-pump', 'tshirt', 'film', 'mug-hot', 'plane', 'hotel', 'dumbbell', 'hand-holding-heart', 'people-group', 'sack-dollar', 'receipt', 'laptop', 'cloud', 'gears', 'gift', 'briefcase', 'building', 'laptop-code', 'youtube', 'facebook', 'gamepad', 'camera', 'music', 'book', 'paw', 'seedling', 'tools'];
 
   openModal({
@@ -117,15 +120,14 @@ async function showCategoryForm(id = null, type = 'income', parentId = null) {
     body: `
       <div class="form-group">
         <label class="form-label">Category Name</label>
-        <input class="form-input" id="catName" value="${cat.name}" placeholder="Category name" />
+        <input class="form-input" id="catName" value="${escapeHtml(cat.name)}" placeholder="Category name" />
       </div>
-      ${!id && !parentId ? `
+      ${!isSubcategory ? `
       <div class="form-group">
         <label class="form-label">Type</label>
         <select class="form-select" id="catType">
-          <option value="income" ${type === 'income' ? 'selected' : ''}>Income</option>
-          <option value="expense" ${type === 'expense' ? 'selected' : ''}>Expense</option>
-          <option value="subcategory">Subcategory</option>
+          <option value="income" ${currentType === 'income' ? 'selected' : ''}>Income</option>
+          <option value="expense" ${currentType === 'expense' ? 'selected' : ''}>Expense</option>
         </select>
       </div>` : ''}
       <div class="form-row">
@@ -174,7 +176,7 @@ async function showCategoryForm(id = null, type = 'income', parentId = null) {
 
   document.getElementById('saveCatBtn').addEventListener('click', async () => {
     const name = document.getElementById('catName').value.trim();
-    const catType = document.getElementById('catType') ? document.getElementById('catType').value : type;
+    const catType = isSubcategory ? 'subcategory' : document.getElementById('catType').value;
 
     if (!name) {
       showToast('Category name is required', 'error');
@@ -194,11 +196,19 @@ async function showCategoryForm(id = null, type = 'income', parentId = null) {
       }
       signalRefresh();
       closeModal();
-      await loadCategories(type);
+      const reloadParent = parentId || cat.parent_id;
+      const reloadType = reloadParent ? (await api.getCategory(reloadParent)).type : catType;
+      await loadCategories(reloadType);
     } catch (err) {
       showToast(err.message, 'error');
     }
   });
+}
+
+function escapeHtml(str = '') {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
 }
 
 function showToast(message, type = 'info') {
