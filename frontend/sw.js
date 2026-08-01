@@ -1,6 +1,10 @@
-const CACHE = 'sr-money-tracker-v4';
+const CACHE = 'sr-money-tracker-v5';
 
-const PREFIX = '/sr-money-tracker';
+// Derive base path from the SW script location, so it works on both
+// GitHub Pages (/sr-money-tracker/) and Vercel (/).
+const PREFIX = self.registration && self.registration.scope
+  ? self.registration.scope.replace(/\/$/, '')
+  : '';
 
 const PRECACHE = [
   PREFIX + '/',

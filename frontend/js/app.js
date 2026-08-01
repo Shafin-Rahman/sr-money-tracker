@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { router } from './router.js';
 import { initI18n, t, loadLang, onLangChange, translatePage } from './i18n.js';
 import { init as initSync, onSyncStatus } from './sync.js';
+import { BASE_PATH } from './config.js';
 import * as dashboard from './pages/dashboard.js';
 import * as accounts from './pages/accounts.js';
 import * as transactions from './pages/transactions.js';
@@ -437,6 +438,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Register service worker for PWA
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sr-money-tracker/sw.js').catch(() => {});
+    navigator.serviceWorker.register(BASE_PATH + '/sw.js').catch(() => {});
   }
 });
