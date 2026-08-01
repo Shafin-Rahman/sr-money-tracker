@@ -1,4 +1,4 @@
-const CACHE = 'sr-money-tracker-v2';
+const CACHE = 'sr-money-tracker-v3';
 
 const PREFIX = '/sr-money-tracker';
 
@@ -15,6 +15,7 @@ const PRECACHE = [
   PREFIX + '/css/components/dark-mode.css',
   PREFIX + '/js/app.js',
   PREFIX + '/js/api.js',
+  PREFIX + '/js/config.js',
   PREFIX + '/js/router.js',
   PREFIX + '/js/i18n.js',
   PREFIX + '/js/utils.js',

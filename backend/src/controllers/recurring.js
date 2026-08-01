@@ -1,29 +1,26 @@
-import { getSqlite } from '../db/index.js';
+import { get, all, run } from '../db/index.js';
 import { now, generateId } from '../utils/helpers.js';
 
-export function list(req, res) {
-  const db = getSqlite();
-  const bills = db.prepare(`SELECT rb.*, c.name as category_name, c.color as category_color, c.icon as category_icon,
+export async function list(req, res) {
+  const bills = await all(`SELECT rb.*, c.name as category_name, c.color as category_color, c.icon as category_icon,
     a.name as account_name, a.color as account_color
     FROM recurring_bills rb
     LEFT JOIN categories c ON rb.category_id = c.id
     LEFT JOIN accounts a ON rb.account_id = a.id
-    ORDER BY rb.next_date ASC`).all();
+    ORDER BY rb.next_date ASC`);
   res.json(bills);
 }
 
-export function getById(req, res) {
-  const db = getSqlite();
-  const bill = db.prepare(`SELECT rb.*, c.name as category_name, c.color as category_color,
+export async function getById(req, res) {
+  const bill = await get(`SELECT rb.*, c.name as category_name, c.color as category_color,
     a.name as account_name FROM recurring_bills rb
     LEFT JOIN categories c ON rb.category_id = c.id
-    LEFT JOIN accounts a ON rb.account_id = a.id WHERE rb.id = ?`).get(req.params.id);
+    LEFT JOIN accounts a ON rb.account_id = a.id WHERE rb.id = ?`, req.params.id);
   if (!bill) return res.status(404).json({ error: 'Recurring bill not found' });
   res.json(bill);
 }
 
-export function create(req, res) {
-  const db = getSqlite();
+export async function create(req, res) {
   const id = generateId();
   const timestamp = now();
 
@@ -31,31 +28,30 @@ export function create(req, res) {
 
   const nextDate = calculateNextDate(interval, dayOfMonth, dayOfWeek, startDate);
 
-  db.prepare(`INSERT INTO recurring_bills (id, name, amount, category_id, account_id, interval, day_of_month, day_of_week, start_date, end_date, next_date, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+  await run(`INSERT INTO recurring_bills (id, name, amount, category_id, account_id, interval, day_of_month, day_of_week, start_date, end_date, next_date, notes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id, name, amount, categoryId || null, accountId || null, interval,
     dayOfMonth || null, dayOfWeek || null, startDate, endDate || null,
     nextDate, notes || null, timestamp, timestamp
   );
 
-  const bill = db.prepare('SELECT * FROM recurring_bills WHERE id = ?').get(id);
+  const bill = await get('SELECT * FROM recurring_bills WHERE id = ?', id);
   res.status(201).json(bill);
 }
 
-export function update(req, res) {
-  const db = getSqlite();
+export async function update(req, res) {
   const timestamp = now();
-  const existing = db.prepare('SELECT * FROM recurring_bills WHERE id = ?').get(req.params.id);
+  const existing = await get('SELECT * FROM recurring_bills WHERE id = ?', req.params.id);
   if (!existing) return res.status(404).json({ error: 'Recurring bill not found' });
 
   const { name, amount, categoryId, accountId, interval, dayOfMonth, dayOfWeek, startDate, endDate, isActive, notes } = req.body;
 
-  db.prepare(`UPDATE recurring_bills SET
+  await run(`UPDATE recurring_bills SET
     name = COALESCE(?, name), amount = COALESCE(?, amount),
     category_id = ?, account_id = ?, interval = COALESCE(?, interval),
     day_of_month = ?, day_of_week = ?, start_date = COALESCE(?, start_date),
     end_date = ?, is_active = COALESCE(?, is_active),
-    notes = ?, updated_at = ? WHERE id = ?`).run(
+    notes = ?, updated_at = ? WHERE id = ?`,
     name || null, amount || null,
     categoryId !== undefined ? categoryId : existing.category_id,
     accountId !== undefined ? accountId : existing.account_id,
@@ -68,15 +64,14 @@ export function update(req, res) {
     notes !== undefined ? notes : existing.notes, timestamp, req.params.id
   );
 
-  const bill = db.prepare('SELECT * FROM recurring_bills WHERE id = ?').get(req.params.id);
+  const bill = await get('SELECT * FROM recurring_bills WHERE id = ?', req.params.id);
   res.json(bill);
 }
 
-export function remove(req, res) {
-  const db = getSqlite();
-  const existing = db.prepare('SELECT * FROM recurring_bills WHERE id = ?').get(req.params.id);
+export async function remove(req, res) {
+  const existing = await get('SELECT * FROM recurring_bills WHERE id = ?', req.params.id);
   if (!existing) return res.status(404).json({ error: 'Recurring bill not found' });
-  db.prepare('DELETE FROM recurring_bills WHERE id = ?').run(req.params.id);
+  await run('DELETE FROM recurring_bills WHERE id = ?', req.params.id);
   res.json({ message: 'Recurring bill deleted' });
 }
 

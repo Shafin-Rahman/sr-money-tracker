@@ -1,6 +1,6 @@
-import { sqliteTable, text, real, integer, index } from 'drizzle-orm/sqlite-core';
+import { pgTable, text, integer, doublePrecision, index } from 'drizzle-orm/pg-core';
 
-export const users = sqliteTable('users', {
+export const users = pgTable('users', {
   id: text('id').primaryKey(),
   name: text('name').notNull().default('Default User'),
   email: text('email'),
@@ -12,14 +12,14 @@ export const users = sqliteTable('users', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const accounts = sqliteTable('accounts', {
+export const accounts = pgTable('accounts', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   type: text('type').notNull().default('custom'),
   icon: text('icon').notNull().default('wallet'),
   color: text('color').notNull().default('#6366f1'),
-  openingBalance: real('opening_balance').notNull().default(0),
-  currentBalance: real('current_balance').notNull().default(0),
+  openingBalance: doublePrecision('opening_balance').notNull().default(0),
+  currentBalance: doublePrecision('current_balance').notNull().default(0),
   notes: text('notes'),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   isArchived: integer('is_archived', { mode: 'boolean' }).notNull().default(false),
@@ -28,7 +28,7 @@ export const accounts = sqliteTable('accounts', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const categories = sqliteTable('categories', {
+export const categories = pgTable('categories', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   type: text('type').notNull(),
@@ -45,17 +45,17 @@ export const categories = sqliteTable('categories', {
   index('idx_categories_parent').on(table.parentId),
 ]);
 
-export const tags = sqliteTable('tags', {
+export const tags = pgTable('tags', {
   id: text('id').primaryKey(),
   name: text('name').notNull().unique(),
   color: text('color').notNull().default('#6366f1'),
   createdAt: text('created_at').notNull(),
 });
 
-export const transactions = sqliteTable('transactions', {
+export const transactions = pgTable('transactions', {
   id: text('id').primaryKey(),
   type: text('type').notNull(),
-  amount: real('amount').notNull(),
+  amount: doublePrecision('amount').notNull(),
   accountId: text('account_id').notNull().references(() => accounts.id),
   toAccountId: text('to_account_id').references(() => accounts.id),
   categoryId: text('category_id').references(() => categories.id),
@@ -79,7 +79,7 @@ export const transactions = sqliteTable('transactions', {
   index('idx_transactions_category').on(table.categoryId),
 ]);
 
-export const transactionTags = sqliteTable('transaction_tags', {
+export const transactionTags = pgTable('transaction_tags', {
   id: text('id').primaryKey(),
   transactionId: text('transaction_id').notNull().references(() => transactions.id),
   tagId: text('tag_id').notNull().references(() => tags.id),
@@ -88,16 +88,16 @@ export const transactionTags = sqliteTable('transaction_tags', {
   index('idx_txn_tags_tag').on(table.tagId),
 ]);
 
-export const loans = sqliteTable('loans', {
+export const loans = pgTable('loans', {
   id: text('id').primaryKey(),
   type: text('type').notNull(),
   personName: text('person_name').notNull(),
   personPhone: text('person_phone'),
   personAddress: text('person_address'),
-  amount: real('amount').notNull(),
-  paidAmount: real('paid_amount').notNull().default(0),
-  remainingAmount: real('remaining_amount').notNull(),
-  interestRate: real('interest_rate').default(0),
+  amount: doublePrecision('amount').notNull(),
+  paidAmount: doublePrecision('paid_amount').notNull().default(0),
+  remainingAmount: doublePrecision('remaining_amount').notNull(),
+  interestRate: doublePrecision('interest_rate').default(0),
   accountId: text('account_id').references(() => accounts.id),
   dueDate: text('due_date'),
   status: text('status').notNull().default('active'),
@@ -109,16 +109,16 @@ export const loans = sqliteTable('loans', {
   index('idx_loans_person').on(table.personName),
 ]);
 
-export const loanPayments = sqliteTable('loan_payments', {
+export const loanPayments = pgTable('loan_payments', {
   id: text('id').primaryKey(),
   loanId: text('loan_id').notNull().references(() => loans.id),
-  amount: real('amount').notNull(),
+  amount: doublePrecision('amount').notNull(),
   date: text('date').notNull(),
   notes: text('notes'),
   createdAt: text('created_at').notNull(),
 });
 
-export const settings = sqliteTable('settings', {
+export const settings = pgTable('settings', {
   id: text('id').primaryKey(),
   key: text('key').notNull().unique(),
   value: text('value').notNull(),
@@ -126,10 +126,10 @@ export const settings = sqliteTable('settings', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const budgets = sqliteTable('budgets', {
+export const budgets = pgTable('budgets', {
   id: text('id').primaryKey(),
   categoryId: text('category_id').references(() => categories.id),
-  amount: real('amount').notNull(),
+  amount: doublePrecision('amount').notNull(),
   period: text('period').notNull(),
   startDate: text('start_date').notNull(),
   endDate: text('end_date'),
@@ -138,11 +138,11 @@ export const budgets = sqliteTable('budgets', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const savingsGoals = sqliteTable('savings_goals', {
+export const savingsGoals = pgTable('savings_goals', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
-  targetAmount: real('target_amount').notNull(),
-  currentAmount: real('current_amount').notNull().default(0),
+  targetAmount: doublePrecision('target_amount').notNull(),
+  currentAmount: doublePrecision('current_amount').notNull().default(0),
   accountId: text('account_id').references(() => accounts.id),
   deadline: text('deadline'),
   icon: text('icon').notNull().default('piggy-bank'),
@@ -153,7 +153,7 @@ export const savingsGoals = sqliteTable('savings_goals', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const customFields = sqliteTable('custom_fields', {
+export const customFields = pgTable('custom_fields', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   type: text('type').notNull().default('text'),
@@ -163,7 +163,7 @@ export const customFields = sqliteTable('custom_fields', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const transactionCustomFields = sqliteTable('transaction_custom_fields', {
+export const transactionCustomFields = pgTable('transaction_custom_fields', {
   id: text('id').primaryKey(),
   transactionId: text('transaction_id').notNull().references(() => transactions.id),
   fieldId: text('field_id').notNull().references(() => customFields.id),
@@ -171,7 +171,7 @@ export const transactionCustomFields = sqliteTable('transaction_custom_fields', 
   createdAt: text('created_at').notNull(),
 });
 
-export const appLock = sqliteTable('app_lock', {
+export const appLock = pgTable('app_lock', {
   id: text('id').primaryKey(),
   pinHash: text('pin_hash'),
   isEnabled: integer('is_enabled', { mode: 'boolean' }).notNull().default(false),
@@ -181,10 +181,10 @@ export const appLock = sqliteTable('app_lock', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const recurringBills = sqliteTable('recurring_bills', {
+export const recurringBills = pgTable('recurring_bills', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
-  amount: real('amount').notNull(),
+  amount: doublePrecision('amount').notNull(),
   categoryId: text('category_id').references(() => categories.id),
   accountId: text('account_id').references(() => accounts.id),
   interval: text('interval').notNull(),

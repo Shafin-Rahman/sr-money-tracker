@@ -1,8 +1,7 @@
-import { getSqlite } from '../db/index.js';
+import { get, all, run } from '../db/index.js';
 import { now, generateId } from '../utils/helpers.js';
 
-export function list(req, res) {
-  const db = getSqlite();
+export async function list(req, res) {
   const { type, accountId, categoryId, startDate, endDate, page = 1, limit = 50 } = req.query;
 
   let query = `SELECT t.*, a.name as account_name, a.icon as account_icon, a.color as account_color,
@@ -39,7 +38,7 @@ export function list(req, res) {
 
   const offset = (parseInt(page) - 1) * parseInt(limit);
 
-  const countQuery = `SELECT COUNT(*) as total FROM transactions t WHERE t.is_removed = 0` +
+  const countQuery = `SELECT CAST(COUNT(*) AS INTEGER) as total FROM transactions t WHERE t.is_removed = 0` +
     (type ? ' AND t.type = ?' : '') +
     (accountId ? ' AND (t.account_id = ? OR t.to_account_id = ?)' : '') +
     (categoryId ? ' AND t.category_id = ?' : '') +
@@ -51,12 +50,12 @@ export function list(req, res) {
   if (categoryId) countParams.push(categoryId);
   if (startDate) countParams.push(startDate);
   if (endDate) countParams.push(endDate);
-  const total = db.prepare(countQuery).get(...countParams);
+  const total = await get(countQuery, ...countParams);
 
   query += ' ORDER BY t.date DESC, t.created_at DESC LIMIT ? OFFSET ?';
   params.push(parseInt(limit), offset);
 
-  const transactions = db.prepare(query).all(...params);
+  const transactions = await all(query, ...params);
 
   const tagsQuery = `SELECT tt.transaction_id, tg.id, tg.name, tg.color
     FROM transaction_tags tt
@@ -64,7 +63,7 @@ export function list(req, res) {
     WHERE tt.transaction_id IN (${transactions.map(() => '?').join(',')})`;
 
   if (transactions.length > 0) {
-    const tags = db.prepare(tagsQuery).all(...transactions.map((t) => t.id));
+    const tags = await all(tagsQuery, ...transactions.map((t) => t.id));
     const tagsByTxn = {};
     tags.forEach((tag) => {
       if (!tagsByTxn[tag.transaction_id]) tagsByTxn[tag.transaction_id] = [];
@@ -78,28 +77,26 @@ export function list(req, res) {
   res.json({ transactions, total: total.total, page: parseInt(page), limit: parseInt(limit) });
 }
 
-export function getById(req, res) {
-  const db = getSqlite();
-  const transaction = db.prepare(`SELECT t.*, a.name as account_name, a.icon as account_icon, a.color as account_color,
+export async function getById(req, res) {
+  const transaction = await get(`SELECT t.*, a.name as account_name, a.icon as account_icon, a.color as account_color,
     ta.name as to_account_name,
     c.name as category_name, c.icon as category_icon, c.color as category_color
     FROM transactions t
     LEFT JOIN accounts a ON t.account_id = a.id
     LEFT JOIN accounts ta ON t.to_account_id = ta.id
     LEFT JOIN categories c ON t.category_id = c.id
-    WHERE t.id = ?`).get(req.params.id);
+    WHERE t.id = ?`, req.params.id);
 
   if (!transaction) {
     return res.status(404).json({ error: 'Transaction not found' });
   }
 
-  transaction.tags = db.prepare(`SELECT tg.* FROM transaction_tags tt JOIN tags tg ON tt.tag_id = tg.id WHERE tt.transaction_id = ?`).all(req.params.id);
+  transaction.tags = await all(`SELECT tg.* FROM transaction_tags tt JOIN tags tg ON tt.tag_id = tg.id WHERE tt.transaction_id = ?`, req.params.id);
 
   res.json(transaction);
 }
 
-export function create(req, res) {
-  const db = getSqlite();
+export async function create(req, res) {
   const id = generateId();
   const timestamp = now();
 
@@ -110,47 +107,45 @@ export function create(req, res) {
     return res.status(400).json({ error: 'Amount cannot be negative' });
   }
 
-  const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(accountId);
+  const account = await get('SELECT * FROM accounts WHERE id = ?', accountId);
   if (!account) {
     return res.status(404).json({ error: 'Account not found' });
   }
 
-  db.prepare(`INSERT INTO transactions (id, type, amount, account_id, to_account_id, category_id,
+  await run(`INSERT INTO transactions (id, type, amount, account_id, to_account_id, category_id,
     description, person_name, person_phone, location, notes, date, time, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id, type, amount, accountId, toAccountId || null, categoryId || null,
     description || null, personName || null, personPhone || null,
     location || null, notes || null, date, time || null, timestamp, timestamp
   );
 
-  updateAccountBalance(db, accountId);
+  await updateAccountBalance(accountId);
 
   if (toAccountId) {
-    updateAccountBalance(db, toAccountId);
+    await updateAccountBalance(toAccountId);
   }
 
   if (tagIds && tagIds.length > 0) {
-    const insertTag = db.prepare('INSERT INTO transaction_tags (id, transaction_id, tag_id) VALUES (?, ?, ?)');
-    tagIds.forEach((tagId) => {
-      insertTag.run(generateId(), id, tagId);
-    });
+    for (const tagId of tagIds) {
+      await run('INSERT INTO transaction_tags (id, transaction_id, tag_id) VALUES (?, ?, ?)', generateId(), id, tagId);
+    }
   }
 
-  const transaction = db.prepare(`SELECT t.*, a.name as account_name,
+  const transaction = await get(`SELECT t.*, a.name as account_name,
     c.name as category_name, c.icon as category_icon, c.color as category_color
     FROM transactions t
     LEFT JOIN accounts a ON t.account_id = a.id
     LEFT JOIN categories c ON t.category_id = c.id
-    WHERE t.id = ?`).get(id);
+    WHERE t.id = ?`, id);
 
   res.status(201).json(transaction);
 }
 
-export function update(req, res) {
-  const db = getSqlite();
+export async function update(req, res) {
   const timestamp = now();
 
-  const existing = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
+  const existing = await get('SELECT * FROM transactions WHERE id = ?', req.params.id);
   if (!existing) {
     return res.status(404).json({ error: 'Transaction not found' });
   }
@@ -158,7 +153,7 @@ export function update(req, res) {
   const { type, amount, accountId, toAccountId, categoryId, description,
     personName, personPhone, location, notes, date, time, tags: tagIds, isRemoved } = req.body;
 
-  db.prepare(`UPDATE transactions SET
+  await run(`UPDATE transactions SET
     type = COALESCE(?, type),
     amount = COALESCE(?, amount),
     account_id = COALESCE(?, account_id),
@@ -173,7 +168,7 @@ export function update(req, res) {
     time = COALESCE(?, time),
     is_removed = COALESCE(?, is_removed),
     updated_at = ?
-    WHERE id = ?`).run(
+    WHERE id = ?`,
     type || null, amount || null, accountId || null,
     toAccountId !== undefined ? toAccountId : existing.to_account_id,
     categoryId !== undefined ? categoryId : existing.category_id,
@@ -184,49 +179,44 @@ export function update(req, res) {
   );
 
   if (tagIds !== undefined) {
-    db.prepare('DELETE FROM transaction_tags WHERE transaction_id = ?').run(req.params.id);
-    if (tagIds.length > 0) {
-      const insertTag = db.prepare('INSERT INTO transaction_tags (id, transaction_id, tag_id) VALUES (?, ?, ?)');
-      tagIds.forEach((tagId) => {
-        insertTag.run(generateId(), req.params.id, tagId);
-      });
+    await run('DELETE FROM transaction_tags WHERE transaction_id = ?', req.params.id);
+    for (const tagId of tagIds) {
+      await run('INSERT INTO transaction_tags (id, transaction_id, tag_id) VALUES (?, ?, ?)', generateId(), req.params.id, tagId);
     }
   }
 
   const oldAccountId = existing.account_id;
   const newAccountId = accountId || existing.account_id;
-  updateAccountBalance(db, oldAccountId);
+  await updateAccountBalance(oldAccountId);
   if (newAccountId !== oldAccountId) {
-    updateAccountBalance(db, newAccountId);
+    await updateAccountBalance(newAccountId);
   }
 
-  const transaction = db.prepare(`SELECT t.*, a.name as account_name,
+  const transaction = await get(`SELECT t.*, a.name as account_name,
     c.name as category_name, c.icon as category_icon, c.color as category_color
     FROM transactions t
     LEFT JOIN accounts a ON t.account_id = a.id
     LEFT JOIN categories c ON t.category_id = c.id
-    WHERE t.id = ?`).get(req.params.id);
+    WHERE t.id = ?`, req.params.id);
 
   res.json(transaction);
 }
 
-export function remove(req, res) {
-  const db = getSqlite();
-  const existing = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
+export async function remove(req, res) {
+  const existing = await get('SELECT * FROM transactions WHERE id = ?', req.params.id);
 
   if (!existing) {
     return res.status(404).json({ error: 'Transaction not found' });
   }
 
-  db.prepare('UPDATE transactions SET is_removed = 1, updated_at = ? WHERE id = ?').run(now(), req.params.id);
-  updateAccountBalance(db, existing.account_id);
+  await run('UPDATE transactions SET is_removed = 1, updated_at = ? WHERE id = ?', now(), req.params.id);
+  await updateAccountBalance(existing.account_id);
 
   res.json({ message: 'Transaction removed successfully' });
 }
 
-export function duplicate(req, res) {
-  const db = getSqlite();
-  const existing = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
+export async function duplicate(req, res) {
+  const existing = await get('SELECT * FROM transactions WHERE id = ?', req.params.id);
 
   if (!existing) {
     return res.status(404).json({ error: 'Transaction not found' });
@@ -235,27 +225,27 @@ export function duplicate(req, res) {
   const newId = generateId();
   const timestamp = now();
 
-  db.prepare(`INSERT INTO transactions (id, type, amount, account_id, to_account_id, category_id,
+  await run(`INSERT INTO transactions (id, type, amount, account_id, to_account_id, category_id,
     description, person_name, person_phone, location, notes, date, time, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     newId, existing.type, existing.amount, existing.account_id, existing.to_account_id,
     existing.category_id, existing.description, existing.person_name, existing.person_phone,
     existing.location, existing.notes, existing.date, existing.time, timestamp, timestamp
   );
 
-  const oldTags = db.prepare('SELECT tag_id FROM transaction_tags WHERE transaction_id = ?').all(req.params.id);
-  oldTags.forEach((t) => {
-    db.prepare('INSERT INTO transaction_tags (id, transaction_id, tag_id) VALUES (?, ?, ?)').run(generateId(), newId, t.tag_id);
-  });
+  const oldTags = await all('SELECT tag_id FROM transaction_tags WHERE transaction_id = ?', req.params.id);
+  for (const t of oldTags) {
+    await run('INSERT INTO transaction_tags (id, transaction_id, tag_id) VALUES (?, ?, ?)', generateId(), newId, t.tag_id);
+  }
 
-  updateAccountBalance(db, existing.account_id);
+  await updateAccountBalance(existing.account_id);
 
-  const transaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(newId);
+  const transaction = await get('SELECT * FROM transactions WHERE id = ?', newId);
   res.status(201).json(transaction);
 }
 
-function updateAccountBalance(db, accountId) {
-  const result = db.prepare(`
+async function updateAccountBalance(accountId) {
+  const result = await get(`
     SELECT
       COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
       COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expense,
@@ -265,13 +255,13 @@ function updateAccountBalance(db, accountId) {
       COALESCE(SUM(CASE WHEN type = 'loan_given' THEN amount ELSE 0 END), 0) as total_loan_out
     FROM transactions
     WHERE (account_id = ? OR to_account_id = ?) AND is_removed = 0
-  `).get(accountId, accountId, accountId, accountId);
+  `, accountId, accountId, accountId, accountId);
 
-  const account = db.prepare('SELECT opening_balance FROM accounts WHERE id = ?').get(accountId);
+  const account = await get('SELECT opening_balance FROM accounts WHERE id = ?', accountId);
 
   const balance = account.opening_balance +
     result.total_income + result.total_transfer_in + result.total_loan_in -
     (result.total_expense + result.total_transfer_out + result.total_loan_out);
 
-  db.prepare('UPDATE accounts SET current_balance = ?, updated_at = ? WHERE id = ?').run(balance, now(), accountId);
+  await run('UPDATE accounts SET current_balance = ?, updated_at = ? WHERE id = ?', balance, now(), accountId);
 }

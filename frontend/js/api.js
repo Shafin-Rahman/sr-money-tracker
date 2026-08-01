@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3001/api';
+import { API_BASE } from './config.js';
 
 async function request(endpoint, options = {}) {
   const config = {

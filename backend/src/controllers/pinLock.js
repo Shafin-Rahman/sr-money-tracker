@@ -1,4 +1,4 @@
-import { getSqlite } from '../db/index.js';
+import { get, run } from '../db/index.js';
 import crypto from 'crypto';
 import { now, generateId } from '../utils/helpers.js';
 
@@ -6,15 +6,14 @@ function hashPin(pin) {
   return crypto.createHash('sha256').update(pin + 'sr-money-tracker-salt').digest('hex');
 }
 
-export function getStatus(req, res) {
-  const db = getSqlite();
-  let lock = db.prepare('SELECT * FROM app_lock LIMIT 1').get();
+export async function getStatus(req, res) {
+  let lock = await get('SELECT * FROM app_lock LIMIT 1');
 
   if (!lock) {
     const id = generateId();
     const timestamp = now();
-    db.prepare('INSERT INTO app_lock (id, is_enabled, auto_lock_minutes, last_unlocked_at, created_at, updated_at) VALUES (?, 0, 5, ?, ?, ?)').run(id, timestamp, timestamp, timestamp);
-    lock = db.prepare('SELECT * FROM app_lock LIMIT 1').get();
+    await run('INSERT INTO app_lock (id, is_enabled, auto_lock_minutes, last_unlocked_at, created_at, updated_at) VALUES (?, 0, 5, ?, ?, ?)', id, timestamp, timestamp, timestamp);
+    lock = await get('SELECT * FROM app_lock LIMIT 1');
   }
 
   res.json({
@@ -25,8 +24,7 @@ export function getStatus(req, res) {
   });
 }
 
-export function setupPin(req, res) {
-  const db = getSqlite();
+export async function setupPin(req, res) {
   const { pin } = req.body;
 
   if (!pin || pin.length < 4 || pin.length > 6) {
@@ -36,26 +34,25 @@ export function setupPin(req, res) {
   const timestamp = now();
   const pinHash = hashPin(pin);
 
-  let lock = db.prepare('SELECT * FROM app_lock LIMIT 1').get();
+  let lock = await get('SELECT * FROM app_lock LIMIT 1');
 
   if (lock) {
     if (lock.pin_hash) {
       return res.status(400).json({ error: 'PIN already set. Use update endpoint.' });
     }
-    db.prepare('UPDATE app_lock SET pin_hash = ?, is_enabled = 1, last_unlocked_at = ?, updated_at = ? WHERE id = ?').run(pinHash, timestamp, timestamp, lock.id);
+    await run('UPDATE app_lock SET pin_hash = ?, is_enabled = 1, last_unlocked_at = ?, updated_at = ? WHERE id = ?', pinHash, timestamp, timestamp, lock.id);
   } else {
     const id = generateId();
-    db.prepare('INSERT INTO app_lock (id, pin_hash, is_enabled, auto_lock_minutes, last_unlocked_at, created_at, updated_at) VALUES (?, ?, 1, 5, ?, ?, ?)').run(id, pinHash, timestamp, timestamp, timestamp);
+    await run('INSERT INTO app_lock (id, pin_hash, is_enabled, auto_lock_minutes, last_unlocked_at, created_at, updated_at) VALUES (?, ?, 1, 5, ?, ?, ?)', id, pinHash, timestamp, timestamp, timestamp);
   }
 
   res.json({ message: 'PIN set successfully', isEnabled: true });
 }
 
-export function updatePin(req, res) {
-  const db = getSqlite();
+export async function updatePin(req, res) {
   const { oldPin, newPin } = req.body;
 
-  const lock = db.prepare('SELECT * FROM app_lock LIMIT 1').get();
+  const lock = await get('SELECT * FROM app_lock LIMIT 1');
   if (!lock || !lock.pin_hash) {
     return res.status(400).json({ error: 'No PIN set' });
   }
@@ -68,15 +65,14 @@ export function updatePin(req, res) {
     return res.status(400).json({ error: 'New PIN must be 4-6 digits' });
   }
 
-  db.prepare('UPDATE app_lock SET pin_hash = ?, updated_at = ? WHERE id = ?').run(hashPin(newPin), now(), lock.id);
+  await run('UPDATE app_lock SET pin_hash = ?, updated_at = ? WHERE id = ?', hashPin(newPin), now(), lock.id);
   res.json({ message: 'PIN updated successfully' });
 }
 
-export function verifyPin(req, res) {
-  const db = getSqlite();
+export async function verifyPin(req, res) {
   const { pin } = req.body;
 
-  const lock = db.prepare('SELECT * FROM app_lock LIMIT 1').get();
+  const lock = await get('SELECT * FROM app_lock LIMIT 1');
   if (!lock || !lock.pin_hash) {
     return res.json({ verified: true, message: 'No PIN set' });
   }
@@ -86,16 +82,15 @@ export function verifyPin(req, res) {
   }
 
   const timestamp = now();
-  db.prepare('UPDATE app_lock SET last_unlocked_at = ?, updated_at = ? WHERE id = ?').run(timestamp, timestamp, lock.id);
+  await run('UPDATE app_lock SET last_unlocked_at = ?, updated_at = ? WHERE id = ?', timestamp, timestamp, lock.id);
 
   res.json({ verified: true, message: 'PIN verified' });
 }
 
-export function disablePin(req, res) {
-  const db = getSqlite();
+export async function disablePin(req, res) {
   const { pin } = req.body;
 
-  const lock = db.prepare('SELECT * FROM app_lock LIMIT 1').get();
+  const lock = await get('SELECT * FROM app_lock LIMIT 1');
   if (!lock || !lock.pin_hash) {
     return res.status(400).json({ error: 'No PIN set' });
   }
@@ -104,25 +99,24 @@ export function disablePin(req, res) {
     return res.status(403).json({ error: 'PIN is incorrect' });
   }
 
-  db.prepare('UPDATE app_lock SET pin_hash = NULL, is_enabled = 0, updated_at = ? WHERE id = ?').run(now(), lock.id);
+  await run('UPDATE app_lock SET pin_hash = NULL, is_enabled = 0, updated_at = ? WHERE id = ?', now(), lock.id);
   res.json({ message: 'PIN disabled', isEnabled: false });
 }
 
-export function updateAutoLock(req, res) {
-  const db = getSqlite();
+export async function updateAutoLock(req, res) {
   const { minutes } = req.body;
 
   if (!minutes || minutes < 1) {
     return res.status(400).json({ error: 'Auto-lock time must be at least 1 minute' });
   }
 
-  let lock = db.prepare('SELECT * FROM app_lock LIMIT 1').get();
+  let lock = await get('SELECT * FROM app_lock LIMIT 1');
   if (lock) {
-    db.prepare('UPDATE app_lock SET auto_lock_minutes = ?, updated_at = ? WHERE id = ?').run(minutes, now(), lock.id);
+    await run('UPDATE app_lock SET auto_lock_minutes = ?, updated_at = ? WHERE id = ?', minutes, now(), lock.id);
   } else {
     const id = generateId();
     const timestamp = now();
-    db.prepare('INSERT INTO app_lock (id, auto_lock_minutes, last_unlocked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(id, minutes, timestamp, timestamp, timestamp);
+    await run('INSERT INTO app_lock (id, auto_lock_minutes, last_unlocked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', id, minutes, timestamp, timestamp, timestamp);
   }
 
   res.json({ message: 'Auto-lock updated', autoLockMinutes: minutes });

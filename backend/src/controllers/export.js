@@ -1,7 +1,6 @@
-import { getSqlite } from '../db/index.js';
+import { all } from '../db/index.js';
 
-export function exportCSV(req, res) {
-  const db = getSqlite();
+export async function exportCSV(req, res) {
   const { startDate, endDate, type } = req.query;
 
   let query = `SELECT t.date, t.time, t.type, t.amount, t.description,
@@ -17,7 +16,7 @@ export function exportCSV(req, res) {
   if (type) { query += ' AND t.type = ?'; params.push(type); }
   query += ' ORDER BY t.date DESC';
 
-  const transactions = db.prepare(query).all(...params);
+  const transactions = await all(query, ...params);
 
   const headers = ['Date', 'Time', 'Type', 'Amount', 'Description', 'Account', 'Category', 'Person', 'Notes'];
   const rows = transactions.map((t) => [
@@ -33,9 +32,8 @@ export function exportCSV(req, res) {
   res.send(csv);
 }
 
-export function exportAccountsCSV(req, res) {
-  const db = getSqlite();
-  const accounts = db.prepare('SELECT name, type, opening_balance, current_balance, notes FROM accounts WHERE is_archived = 0').all();
+export async function exportAccountsCSV(req, res) {
+  const accounts = await all('SELECT name, type, opening_balance, current_balance, notes FROM accounts WHERE is_archived = 0');
 
   const headers = ['Name', 'Type', 'Opening Balance', 'Current Balance', 'Notes'];
   const rows = accounts.map((a) => [a.name, a.type, a.opening_balance, a.current_balance, `"${(a.notes || '').replace(/"/g, '""')}"`]);
@@ -48,13 +46,12 @@ export function exportAccountsCSV(req, res) {
   res.send(csv);
 }
 
-export function exportJSON(req, res) {
-  const db = getSqlite();
+export async function exportJSON(req, res) {
   const data = {
     exportedAt: new Date().toISOString(),
-    transactions: db.prepare('SELECT * FROM transactions WHERE is_removed = 0').all(),
-    accounts: db.prepare('SELECT * FROM accounts').all(),
-    categories: db.prepare('SELECT * FROM categories').all(),
+    transactions: await all('SELECT * FROM transactions WHERE is_removed = 0'),
+    accounts: await all('SELECT * FROM accounts'),
+    categories: await all('SELECT * FROM categories'),
   };
   res.json(data);
 }
