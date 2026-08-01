@@ -1,4 +1,4 @@
-const CACHE = 'sr-money-tracker-v1';
+const CACHE = 'sr-money-tracker-v2';
 
 const PREFIX = '/sr-money-tracker';
 

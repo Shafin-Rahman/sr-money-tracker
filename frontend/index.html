@@ -80,7 +80,7 @@
       </nav>
       <div class="sidebar-footer">
         <div class="theme-toggle">
-          <button id="themeBtn" class="icon-btn" title="Toggle Theme">
+          <button id="themeBtn" class="icon-btn theme-btn" title="Toggle Theme">
             <i class="fas fa-moon"></i>
           </button>
         </div>
@@ -93,6 +93,19 @@
           <h1 id="pageTitle">Dashboard</h1>
         </div>
         <div class="topbar-right">
+          <div class="lang-switcher">
+            <button class="lang-btn" id="langBtn" title="Language">
+              <span id="langLabel">EN</span>
+              <i class="fas fa-chevron-down"></i>
+            </button>
+            <div class="lang-menu" id="langMenu">
+              <button class="lang-option" data-lang="en">English</button>
+              <button class="lang-option" data-lang="bn">বাংলা</button>
+            </div>
+          </div>
+          <button class="icon-btn theme-btn" id="themeTopBtn" title="Toggle Theme">
+            <i class="fas fa-moon"></i>
+          </button>
           <div class="search-box">
             <i class="fas fa-search"></i>
             <input type="text" id="globalSearch" data-i18n="search_placeholder" data-i18n-attr="placeholder" placeholder="Search transactions, accounts, people..." />

@@ -1,7 +1,7 @@
 import { $, today, currentTime, debounce } from './utils.js';
 import { api } from './api.js';
 import { router } from './router.js';
-import { initI18n, t, onLangChange, translatePage } from './i18n.js';
+import { initI18n, t, loadLang, onLangChange, translatePage } from './i18n.js';
 import * as dashboard from './pages/dashboard.js';
 import * as accounts from './pages/accounts.js';
 import * as transactions from './pages/transactions.js';
@@ -59,32 +59,73 @@ window.showToast = showToast;
 function initTheme() {
   const savedTheme = localStorage.getItem('theme') || 'system';
 
+  function setThemeIcons(isDark) {
+    document.querySelectorAll('.theme-btn').forEach((btn) => {
+      btn.innerHTML = isDark
+        ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    });
+  }
+
   function applyTheme(theme) {
     if (theme === 'system') {
       const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-      document.getElementById('themeBtn').innerHTML = isDark
-        ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+      setThemeIcons(isDark);
     } else {
       document.documentElement.setAttribute('data-theme', theme);
-      document.getElementById('themeBtn').innerHTML = theme === 'dark'
-        ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+      setThemeIcons(theme === 'dark');
     }
   }
 
   applyTheme(savedTheme);
 
-  document.getElementById('themeBtn').addEventListener('click', () => {
-    const current = document.documentElement.getAttribute('data-theme');
-    const newTheme = current === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('theme', newTheme);
-    applyTheme(newTheme);
+  document.querySelectorAll('.theme-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme');
+      const newTheme = current === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('theme', newTheme);
+      applyTheme(newTheme);
+    });
   });
 
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     const t = localStorage.getItem('theme') || 'system';
     if (t === 'system') applyTheme('system');
   });
+}
+
+// Language switcher (topbar)
+function initLangSwitcher() {
+  const langBtn = document.getElementById('langBtn');
+  const langMenu = document.getElementById('langMenu');
+
+  function syncLangLabel(lang) {
+    const label = document.getElementById('langLabel');
+    if (label) label.textContent = lang === 'bn' ? 'বাং' : 'EN';
+    langMenu.querySelectorAll('.lang-option').forEach((opt) => {
+      opt.classList.toggle('active', opt.dataset.lang === lang);
+    });
+  }
+
+  langBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    langMenu.classList.toggle('open');
+  });
+
+  langMenu.querySelectorAll('.lang-option').forEach((opt) => {
+    opt.addEventListener('click', async () => {
+      await loadLang(opt.dataset.lang);
+      langMenu.classList.remove('open');
+    });
+  });
+
+  document.addEventListener('click', () => langMenu.classList.remove('open'));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') langMenu.classList.remove('open');
+  });
+
+  onLangChange((lang) => syncLangLabel(lang));
+  syncLangLabel(localStorage.getItem('language') || 'en');
 }
 
 // Sidebar
@@ -345,6 +386,7 @@ onLangChange(() => {
     if (page) el.textContent = t(`nav_${page}`);
   });
   translatePage();
+  _pageRefresh(router.currentPage);
 });
 
 // Init
@@ -353,6 +395,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   initSidebar();
   initSearch();
+  initLangSwitcher();
   initQuickAdd();
   initKeyboard();
   initModal();
