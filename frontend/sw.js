@@ -1,4 +1,4 @@
-const CACHE = 'sr-money-tracker-v3';
+const CACHE = 'sr-money-tracker-v4';
 
 const PREFIX = '/sr-money-tracker';
 
@@ -16,6 +16,9 @@ const PRECACHE = [
   PREFIX + '/js/app.js',
   PREFIX + '/js/api.js',
   PREFIX + '/js/config.js',
+  PREFIX + '/js/localdb.js',
+  PREFIX + '/js/sync.js',
+  PREFIX + '/js/offlineCompute.js',
   PREFIX + '/js/router.js',
   PREFIX + '/js/i18n.js',
   PREFIX + '/js/utils.js',

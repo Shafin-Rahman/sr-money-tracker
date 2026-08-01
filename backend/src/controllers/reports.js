@@ -1,10 +1,10 @@
 import { get, all } from '../db/index.js';
-import { dateRange } from '../utils/helpers.js';
 
 export async function getReport(req, res) {
   const { startDate, endDate, groupBy = 'category' } = req.query;
 
-  const range = dateRange(startDate, endDate);
+  const start = startDate || '0001-01-01';
+  const end = endDate || '9999-12-31';
 
   let report;
 
@@ -15,7 +15,7 @@ export async function getReport(req, res) {
       FROM transactions t LEFT JOIN categories c ON t.category_id = c.id
       WHERE t.date >= ? AND t.date <= ? AND t.is_removed = 0
       GROUP BY c.id, t.type ORDER BY total_amount DESC
-    `, range.start, range.end);
+    `, start, end);
   } else if (groupBy === 'account') {
     report = await all(`
       SELECT a.id as account_id, a.name as account_name, a.icon as account_icon,
@@ -23,7 +23,7 @@ export async function getReport(req, res) {
       FROM transactions t LEFT JOIN accounts a ON t.account_id = a.id
       WHERE t.date >= ? AND t.date <= ? AND t.is_removed = 0
       GROUP BY a.id, t.type ORDER BY total_amount DESC
-    `, range.start, range.end);
+    `, start, end);
   } else if (groupBy === 'daily') {
     report = await all(`
       SELECT t.date,
@@ -33,7 +33,7 @@ export async function getReport(req, res) {
       FROM transactions t
       WHERE t.date >= ? AND t.date <= ? AND t.is_removed = 0
       GROUP BY t.date ORDER BY t.date ASC
-    `, range.start, range.end);
+    `, start, end);
   } else if (groupBy === 'tag') {
     report = await all(`
       SELECT tg.id as tag_id, tg.name as tag_name, tg.color as tag_color,
@@ -42,7 +42,7 @@ export async function getReport(req, res) {
       JOIN tags tg ON tt.tag_id = tg.id
       WHERE t.date >= ? AND t.date <= ? AND t.is_removed = 0
       GROUP BY tg.id ORDER BY total_amount DESC
-    `, range.start, range.end);
+    `, start, end);
   }
 
   const summary = await get(`
@@ -52,7 +52,7 @@ export async function getReport(req, res) {
       COALESCE(SUM(CASE WHEN type = 'transfer' THEN amount ELSE 0 END), 0) as total_transfer
     FROM transactions
     WHERE date >= ? AND date <= ? AND is_removed = 0
-  `, range.start, range.end);
+  `, start, end);
 
   res.json({ summary, report: report || [] });
 }

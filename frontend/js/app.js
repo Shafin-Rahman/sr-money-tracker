@@ -2,6 +2,7 @@ import { $, today, currentTime, debounce } from './utils.js';
 import { api } from './api.js';
 import { router } from './router.js';
 import { initI18n, t, loadLang, onLangChange, translatePage } from './i18n.js';
+import { init as initSync, onSyncStatus } from './sync.js';
 import * as dashboard from './pages/dashboard.js';
 import * as accounts from './pages/accounts.js';
 import * as transactions from './pages/transactions.js';
@@ -289,6 +290,34 @@ function initModal() {
   document.getElementById('modalClose').addEventListener('click', window.closeModal);
 }
 
+// Sync status indicator
+function initSyncStatus() {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+
+  onSyncStatus((status) => {
+    if (status.state === 'offline') {
+      el.style.display = 'inline-flex';
+      el.className = 'sync-indicator offline';
+      el.innerHTML = '<i class="fas fa-wifi-slash"></i><span>Offline</span>';
+    } else if (status.state === 'syncing') {
+      el.style.display = 'inline-flex';
+      el.className = 'sync-indicator syncing';
+      el.innerHTML = '<i class="fas fa-sync-alt"></i><span>Syncing...</span>';
+    } else if (status.state === 'error') {
+      el.style.display = 'inline-flex';
+      el.className = 'sync-indicator error';
+      el.innerHTML = '<i class="fas fa-exclamation-circle"></i><span>Sync error</span>';
+    } else if (status.pending > 0) {
+      el.style.display = 'inline-flex';
+      el.className = 'sync-indicator';
+      el.innerHTML = `<i class="fas fa-cloud-upload-alt"></i><span>${status.pending} pending</span>`;
+    } else {
+      el.style.display = 'none';
+    }
+  });
+}
+
 // Routes
 router.register('dashboard', async () => {
   currentPage = 'dashboard';
@@ -399,8 +428,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   initQuickAdd();
   initKeyboard();
   initModal();
+  initSyncStatus();
   router.init();
   document.title = t('app_name');
+
+  await initSync();
+  signalRefresh();
 
   // Register service worker for PWA
   if ('serviceWorker' in navigator) {

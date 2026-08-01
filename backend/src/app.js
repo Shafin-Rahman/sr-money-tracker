@@ -19,6 +19,7 @@ import recurringRouter from './routes/recurring.js';
 import customFieldsRouter from './routes/customFields.js';
 import exportRouter from './routes/export.js';
 import pinLockRouter from './routes/pinLock.js';
+import { push as syncPush } from './controllers/sync.js';
 
 const app = express();
 
@@ -45,6 +46,8 @@ app.use('/api/pin-lock', pinLockRouter);
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+app.post('/api/sync/push', syncPush);
 
 app.use(errorHandler);
 

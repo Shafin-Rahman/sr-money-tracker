@@ -1,16 +1,16 @@
 import { get, run } from '../db/index.js';
 import crypto from 'crypto';
-import { now, generateId } from '../utils/helpers.js';
+import { now } from '../utils/helpers.js';
 
 function hashPin(pin) {
   return crypto.createHash('sha256').update(pin + 'sr-money-tracker-salt').digest('hex');
 }
 
 export async function getStatus(req, res) {
-  let lock = await get('SELECT * FROM app_lock LIMIT 1');
+  let lock = await get('SELECT * FROM app_lock ORDER BY id LIMIT 1');
 
   if (!lock) {
-    const id = generateId();
+    const id = 'app-lock';
     const timestamp = now();
     await run('INSERT INTO app_lock (id, is_enabled, auto_lock_minutes, last_unlocked_at, created_at, updated_at) VALUES (?, 0, 5, ?, ?, ?)', id, timestamp, timestamp, timestamp);
     lock = await get('SELECT * FROM app_lock LIMIT 1');
@@ -21,6 +21,7 @@ export async function getStatus(req, res) {
     autoLockMinutes: lock.auto_lock_minutes,
     hasPin: !!lock.pin_hash,
     lastUnlockedAt: lock.last_unlocked_at,
+    pinHash: lock.pin_hash || null,
   });
 }
 
@@ -34,7 +35,7 @@ export async function setupPin(req, res) {
   const timestamp = now();
   const pinHash = hashPin(pin);
 
-  let lock = await get('SELECT * FROM app_lock LIMIT 1');
+  let lock = await get('SELECT * FROM app_lock ORDER BY id LIMIT 1');
 
   if (lock) {
     if (lock.pin_hash) {
@@ -42,7 +43,7 @@ export async function setupPin(req, res) {
     }
     await run('UPDATE app_lock SET pin_hash = ?, is_enabled = 1, last_unlocked_at = ?, updated_at = ? WHERE id = ?', pinHash, timestamp, timestamp, lock.id);
   } else {
-    const id = generateId();
+    const id = 'app-lock';
     await run('INSERT INTO app_lock (id, pin_hash, is_enabled, auto_lock_minutes, last_unlocked_at, created_at, updated_at) VALUES (?, ?, 1, 5, ?, ?, ?)', id, pinHash, timestamp, timestamp, timestamp);
   }
 
@@ -110,11 +111,11 @@ export async function updateAutoLock(req, res) {
     return res.status(400).json({ error: 'Auto-lock time must be at least 1 minute' });
   }
 
-  let lock = await get('SELECT * FROM app_lock LIMIT 1');
+  let lock = await get('SELECT * FROM app_lock ORDER BY id LIMIT 1');
   if (lock) {
     await run('UPDATE app_lock SET auto_lock_minutes = ?, updated_at = ? WHERE id = ?', minutes, now(), lock.id);
   } else {
-    const id = generateId();
+    const id = 'app-lock';
     const timestamp = now();
     await run('INSERT INTO app_lock (id, auto_lock_minutes, last_unlocked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', id, minutes, timestamp, timestamp, timestamp);
   }
