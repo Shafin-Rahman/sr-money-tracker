@@ -146,20 +146,29 @@ export async function render() {
     if (!confirm(t('reset_confirm_2'))) return;
 
     try {
+      const ts = new Date().toISOString();
       const emptyData = {
         version: '1.0',
-        exportedAt: new Date().toISOString(),
+        exportedAt: ts,
         accounts: [],
         categories: [],
         transactions: [],
         tags: [],
-        transactionTags: [],
+        transaction_tags: [],
         loans: [],
-        loanPayments: [],
-        settings: [{ key: 'theme', value: 'system' }, { key: 'currency', value: 'BDT' }, { key: 'date_format', value: 'DD/MM/YYYY' }],
+        loan_payments: [],
+        settings: [
+          { id: crypto.randomUUID(), key: 'theme', value: 'system', created_at: ts, updated_at: ts },
+          { id: crypto.randomUUID(), key: 'currency', value: 'BDT', created_at: ts, updated_at: ts },
+          { id: crypto.randomUUID(), key: 'date_format', value: 'DD/MM/YYYY', created_at: ts, updated_at: ts },
+        ],
         budgets: [],
-        recurringBills: [],
+        recurring_bills: [],
+        savings_goals: [],
+        custom_fields: [],
+        transaction_custom_fields: [],
         users: [],
+        app_lock: [],
       };
       await api.importData(emptyData);
       showToast(t('all_data_reset'), 'success');

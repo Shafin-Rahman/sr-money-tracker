@@ -1,6 +1,7 @@
 import { API_BASE } from './config.js';
 import {
   getRecord, getTable, putRecord, deleteRecord, cacheRows, enqueue, pickColumns,
+  getAllRecords, clearAllRecords, TABLE_COLUMNS,
 } from './localdb.js';
 import { sync, isOnline } from './sync.js';
 import { today } from './utils.js';
@@ -13,6 +14,7 @@ import {
   search as localSearch,
   getAccountBalance as localAccountBalance,
   recomputeBalances,
+  budgetWindow,
   exportJSON as localExportJSON,
   exportTransactionsCSV as localExportCSV,
   exportAccountsCSV as localExportAccountsCSV,
@@ -79,7 +81,34 @@ async function commitWrite(ops) {
   for (const op of ops) {
     await enqueue({ table: op.table, id: op.id, op: op.op, data: op.data });
   }
-  await sync();
+  try {
+    await sync();
+  } catch (err) {
+    // The local (IndexedDB) write already succeeded. Sync runs in the
+    // background and will be retried on next online/visibility event.
+    console.warn('Background sync failed, will retry later:', err && err.message);
+  }
+}
+
+// Recompute account balances and append the changed accounts to `ops`.
+// If an account is already in `ops` (e.g. the account being edited), replace
+// its data with the freshly recomputed one so the recomputed balance wins and
+// the outbox never receives a duplicate entry for the same record id.
+async function pushChangedAccounts(ops) {
+  const changed = await recomputeBalances();
+  const accountIdx = new Map();
+  ops.forEach((o, i) => {
+    if (o.table === 'accounts') accountIdx.set(o.id, i);
+  });
+  for (const acc of changed) {
+    const data = pickColumns(acc, 'accounts');
+    const existingIdx = accountIdx.get(acc.id);
+    if (existingIdx !== undefined) {
+      ops[existingIdx].data = data;
+    } else {
+      ops.push({ table: 'accounts', id: acc.id, op: 'upsert', data });
+    }
+  }
 }
 
 async function maxSort(table) {
@@ -140,6 +169,39 @@ function calculateNextDate(interval, dayOfMonth, dayOfWeek, startDate) {
     return d.toISOString().split('T')[0];
   }
   return start.toISOString().split('T')[0];
+}
+
+// Map camelCase backup keys (older local exports) to real table names.
+const SNAPSHOT_KEY_MAP = {
+  transactionTags: 'transaction_tags',
+  loanPayments: 'loan_payments',
+  savingsGoals: 'savings_goals',
+  recurringBills: 'recurring_bills',
+  customFields: 'custom_fields',
+  transactionCustomFields: 'transaction_custom_fields',
+  txnCustomFields: 'transaction_custom_fields',
+};
+
+// Normalize an imported backup into per-table rows, filling missing ids and
+// timestamps so the server can insert them.
+function normalizeSnapshot(data, ts) {
+  const source = {};
+  for (const key of Object.keys(data || {})) {
+    const table = SNAPSHOT_KEY_MAP[key] || key;
+    source[table] = data[key];
+  }
+  const snapshot = {};
+  for (const table of Object.keys(TABLE_COLUMNS)) {
+    const rows = Array.isArray(source[table]) ? source[table] : [];
+    snapshot[table] = rows.map((r) => {
+      const out = pickColumns(r, table);
+      if (out.id === undefined || out.id === null) out.id = uuid();
+      if (TABLE_COLUMNS[table].includes('created_at') && !out.created_at) out.created_at = ts;
+      if (TABLE_COLUMNS[table].includes('updated_at') && !out.updated_at) out.updated_at = ts;
+      return out;
+    });
+  }
+  return snapshot;
 }
 
 export const api = {
@@ -214,13 +276,29 @@ export const api = {
     if (data.isActive !== undefined) row.is_active = data.isActive ? 1 : 0;
     if (data.isArchived !== undefined) row.is_archived = data.isArchived ? 1 : 0;
     if (data.sortOrder) row.sort_order = data.sortOrder;
+    if (data.openingBalance !== undefined && data.openingBalance !== null) row.opening_balance = Number(data.openingBalance);
     await putRecord('accounts', row);
-    await commitWrite([{ table: 'accounts', id, op: 'upsert', data: row }]);
+    const ops = [{ table: 'accounts', id, op: 'upsert', data: row }];
+    await pushChangedAccounts(ops);
+    await commitWrite(ops);
     return row;
   },
   async deleteAccount(id) {
     const existing = await getRecord('accounts', id);
     if (!existing) throw notFound('Account');
+    const [txns, loans, goals] = await Promise.all([
+      getTable('transactions'),
+      getTable('loans'),
+      getTable('savings_goals'),
+    ]);
+    const inUseTxns = txns.filter((t) => (t.account_id === id || t.to_account_id === id) && t.is_removed === 0);
+    const inUseLoans = loans.filter((l) => l.account_id === id);
+    const inUseGoals = goals.filter((g) => g.account_id === id);
+    if (inUseTxns.length > 0 || inUseLoans.length > 0 || inUseGoals.length > 0) {
+      const err = new Error('Cannot delete an account that has transactions, loans or savings goals. Archive it instead.');
+      err.status = 400;
+      throw err;
+    }
     await deleteRecord('accounts', id);
     await commitWrite([{ table: 'accounts', id, op: 'delete' }]);
     return { message: 'Account deleted successfully' };
@@ -367,6 +445,18 @@ export const api = {
       err.status = 400;
       throw err;
     }
+    if (data.type === 'transfer') {
+      if (!data.toAccountId) {
+        const err = new Error('Transfer requires a destination account');
+        err.status = 400;
+        throw err;
+      }
+      if (data.toAccountId === data.accountId) {
+        const err = new Error('Source and destination account must be different');
+        err.status = 400;
+        throw err;
+      }
+    }
     if (data.accountId) {
       const account = await getRecord('accounts', data.accountId);
       if (!account) {
@@ -418,6 +508,26 @@ export const api = {
     if (!existing) throw notFound('Transaction');
     const ts = new Date().toISOString();
     const row = { ...existing, updated_at: ts };
+
+    if (data.amount !== undefined && data.amount !== null && Number(data.amount) < 0) {
+      const err = new Error('Amount cannot be negative');
+      err.status = 400;
+      throw err;
+    }
+    if ((data.type || row.type) === 'transfer') {
+      const from = data.accountId || row.account_id;
+      const to = data.toAccountId !== undefined ? data.toAccountId : row.to_account_id;
+      if (!to) {
+        const err = new Error('Transfer requires a destination account');
+        err.status = 400;
+        throw err;
+      }
+      if (to === from) {
+        const err = new Error('Source and destination account must be different');
+        err.status = 400;
+        throw err;
+      }
+    }
 
     if (data.type) row.type = data.type;
     if (data.amount !== undefined && data.amount !== null) row.amount = Number(data.amount);
@@ -486,7 +596,7 @@ export const api = {
       await putRecord('transaction_tags', link);
       ops.push({ table: 'transaction_tags', id: linkId, op: 'upsert', data: link });
     }
-    await recomputeBalances();
+    await pushChangedAccounts(ops);
     await commitWrite(ops);
     return localTransaction(newId);
   },
@@ -558,7 +668,9 @@ export const api = {
       updated_at: ts,
     }, 'loans');
     await putRecord('loans', row);
-    await commitWrite([{ table: 'loans', id, op: 'upsert', data: row }]);
+    const ops = [{ table: 'loans', id, op: 'upsert', data: row }];
+    await pushChangedAccounts(ops);
+    await commitWrite(ops);
     return row;
   },
   async updateLoan(id, data) {
@@ -574,9 +686,13 @@ export const api = {
     if (data.notes) row.notes = data.notes;
     const payments = (await getTable('loan_payments')).filter((p) => p.loan_id === id);
     const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
+    row.paid_amount = totalPaid;
     row.remaining_amount = (row.amount || 0) - totalPaid;
+    if (row.remaining_amount <= 0 && row.status === 'active') row.status = 'paid';
     await putRecord('loans', row);
-    await commitWrite([{ table: 'loans', id, op: 'upsert', data: row }]);
+    const ops = [{ table: 'loans', id, op: 'upsert', data: pickColumns(row, 'loans') }];
+    await pushChangedAccounts(ops);
+    await commitWrite(ops);
     return row;
   },
   async deleteLoan(id) {
@@ -590,6 +706,7 @@ export const api = {
     }
     await deleteRecord('loans', id);
     ops.push({ table: 'loans', id, op: 'delete' });
+    await pushChangedAccounts(ops);
     await commitWrite(ops);
     return { message: 'Loan deleted successfully' };
   },
@@ -686,11 +803,13 @@ export const api = {
       budgets.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
       const categories = await getTable('categories');
       const txns = (await getTable('transactions')).filter((t) => t.is_removed === 0 && t.type === 'expense');
-      const now = new Date().toISOString();
       return budgets.map((b) => {
         const cat = categories.find((c) => c.id === b.category_id);
-        const spent = txns
-          .filter((t) => t.category_id === b.category_id && t.date >= b.start_date && t.date <= (b.end_date || now))
+        const win = budgetWindow(b);
+        // Overall budget (no category) counts ALL expense transactions in the window.
+        const scope = b.category_id ? txns.filter((t) => t.category_id === b.category_id) : txns;
+        const spent = scope
+          .filter((t) => t.date >= win.start && t.date <= win.end)
           .reduce((s, t) => s + t.amount, 0);
         return {
           ...b,
@@ -838,7 +957,9 @@ export const api = {
       updated_at: ts,
     }, 'savings_goals');
     await putRecord('savings_goals', row);
-    await commitWrite([{ table: 'savings_goals', id, op: 'upsert', data: row }]);
+    const ops = [{ table: 'savings_goals', id, op: 'upsert', data: row }];
+    await pushChangedAccounts(ops);
+    await commitWrite(ops);
     return row;
   },
   async updateSavingsGoal(id, data) {
@@ -855,14 +976,18 @@ export const api = {
     if (data.notes !== undefined) row.notes = data.notes;
     if (data.isActive !== undefined) row.is_active = data.isActive ? 1 : 0;
     await putRecord('savings_goals', row);
-    await commitWrite([{ table: 'savings_goals', id, op: 'upsert', data: row }]);
+    const ops = [{ table: 'savings_goals', id, op: 'upsert', data: pickColumns(row, 'savings_goals') }];
+    await pushChangedAccounts(ops);
+    await commitWrite(ops);
     return row;
   },
   async deleteSavingsGoal(id) {
     const existing = await getRecord('savings_goals', id);
     if (!existing) throw notFound('Savings goal');
     await deleteRecord('savings_goals', id);
-    await commitWrite([{ table: 'savings_goals', id, op: 'delete' }]);
+    const ops = [{ table: 'savings_goals', id, op: 'delete' }];
+    await pushChangedAccounts(ops);
+    await commitWrite(ops);
     return { message: 'Savings goal deleted' };
   },
   async addSavingsFunds(id, data) {
@@ -1203,7 +1328,44 @@ export const api = {
   exportData() {
     return serverFirst(() => request('/backup/export'), localExportJSON);
   },
-  importData(data) {
-    return request('/backup/import', { method: 'POST', body: data });
+  async importData(data) {
+    if (!data || !data.version) {
+      const err = new Error('Invalid backup file format');
+      err.status = 400;
+      throw err;
+    }
+    const ts = new Date().toISOString();
+    const snapshot = normalizeSnapshot(data, ts);
+
+    // Remember what we currently have locally so we can emit delete ops for
+    // anything the import does not contain.
+    const oldRows = await getAllRecords();
+    const oldByTable = {};
+    for (const r of oldRows) {
+      if (!oldByTable[r.table]) oldByTable[r.table] = [];
+      oldByTable[r.table].push(r.data);
+    }
+
+    // 1. Replace IndexedDB first (offline-first: local is always the source).
+    await clearAllRecords();
+    const ops = [];
+    for (const table of Object.keys(TABLE_COLUMNS)) {
+      const rows = snapshot[table] || [];
+      const oldIds = new Set((oldByTable[table] || []).map((r) => r.id));
+      const newIds = new Set(rows.map((r) => r.id));
+      for (const id of oldIds) {
+        if (!newIds.has(id)) ops.push({ table, id, op: 'delete' });
+      }
+      for (const row of rows) {
+        const clean = pickColumns(row, table);
+        if (!Object.keys(clean).length) continue;
+        await putRecord(table, clean);
+        ops.push({ table, id: clean.id, op: 'upsert', data: clean });
+      }
+    }
+
+    // 2. Then sync the whole snapshot to Neon via the outbox.
+    await commitWrite(ops);
+    return { message: 'Data imported successfully' };
   },
 };

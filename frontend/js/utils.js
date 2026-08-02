@@ -17,7 +17,7 @@ export function formatCurrency(amount, currency = 'BDT') {
 
 export function formatDate(dateStr, format = 'DD/MM/YYYY') {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
+  const d = parseDate(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -37,8 +37,21 @@ export function formatTime(timeStr) {
   return `${hour12}:${m} ${ampm}`;
 }
 
+// Parse date strings as LOCAL dates so display never shifts by the timezone
+// offset (new Date('YYYY-MM-DD') is parsed as UTC midnight).
+function parseDate(dateStr) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  return new Date(dateStr);
+}
+
 export function today() {
-  return new Date().toISOString().split('T')[0];
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
 }
 
 export function currentTime() {

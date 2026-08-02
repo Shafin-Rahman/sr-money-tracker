@@ -20,14 +20,15 @@ export async function render() {
 async function loadBills() {
   try {
     const bills = await api.getRecurringBills();
-    const totalMonthly = bills.reduce((s, b) => {
+    const activeBills = bills.filter((b) => b.is_active);
+    const totalMonthly = activeBills.reduce((s, b) => {
       if (b.interval === 'monthly') return s + b.amount;
       if (b.interval === 'weekly') return s + b.amount * 4.33;
       if (b.interval === 'yearly') return s + b.amount / 12;
       if (b.interval === 'daily') return s + b.amount * 30;
       return s;
     }, 0);
-    const upcoming = bills.filter((b) => b.is_active).length;
+    const upcoming = activeBills.length;
 
     document.getElementById('billSummary').innerHTML = `
       <div class="stats-card"><div class="card-icon" style="background:var(--danger-light);color:var(--danger)"><i class="fas fa-calendar-alt"></i></div><div class="stats-info"><div class="stats-label">Monthly Total</div><div class="stats-value">${formatCurrency(totalMonthly)}</div></div></div>

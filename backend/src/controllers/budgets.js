@@ -1,6 +1,41 @@
 import { get, all, run } from '../db/index.js';
 import { now, generateId } from '../utils/helpers.js';
 
+// Spending window for budget progress. For ongoing budgets (no end date) the
+// window is clamped to the CURRENT calendar period, matching the frontend
+// `budgetWindow()` in frontend/js/offlineCompute.js.
+function budgetWindow(budget, todayStr) {
+  if (budget.end_date) {
+    return { start: budget.start_date, end: budget.end_date };
+  }
+  const start = budget.start_date || '0001-01-01';
+  const period = budget.period || 'monthly';
+
+  if (period === 'daily') return { start: todayStr, end: todayStr };
+  if (period === 'weekly') {
+    const d = new Date(`${todayStr}T00:00:00`);
+    const day = d.getDay();
+    d.setDate(d.getDate() - ((day + 6) % 7));
+    const from = toDateStr(d);
+    return { start: from > start ? from : start, end: todayStr };
+  }
+  if (period === 'monthly') {
+    const from = todayStr.substring(0, 7) + '-01';
+    return { start: from > start ? from : start, end: todayStr };
+  }
+  if (period === 'yearly') {
+    const from = todayStr.substring(0, 4) + '-01-01';
+    return { start: from > start ? from : start, end: todayStr };
+  }
+  return { start, end: todayStr };
+}
+
+function toDateStr(d) {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
 export async function list(req, res) {
   const { period, isActive } = req.query;
 
@@ -19,14 +54,21 @@ export async function list(req, res) {
   query += ' ORDER BY b.created_at DESC';
 
   const budgets = await all(query, ...params);
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   for (const budget of budgets) {
-    const spent = await get(`
-      SELECT COALESCE(SUM(amount), 0) as total
+    const win = budgetWindow(budget, todayStr);
+    // Overall budget (category_id is null) counts ALL expense transactions.
+    let spentQuery = `SELECT COALESCE(SUM(amount), 0) as total
       FROM transactions
-      WHERE category_id = ? AND type = 'expense' AND is_removed = 0
-      AND date >= ? AND date <= ?
-    `, budget.category_id, budget.start_date, budget.end_date || now());
+      WHERE type = 'expense' AND is_removed = 0
+      AND date >= ? AND date <= ?`;
+    const spentParams = [win.start, win.end];
+    if (budget.category_id) {
+      spentQuery += ' AND category_id = ?';
+      spentParams.push(budget.category_id);
+    }
+    const spent = await get(spentQuery, ...spentParams);
 
     budget.spent = spent.total;
     budget.remaining = budget.amount - spent.total;

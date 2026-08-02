@@ -1,5 +1,6 @@
 import { get, all, run } from '../db/index.js';
 import { now, generateId } from '../utils/helpers.js';
+import { recomputeAccountBalance } from '../utils/balances.js';
 
 export async function list(req, res) {
   const goals = await all('SELECT * FROM savings_goals WHERE is_active = 1 ORDER BY created_at DESC');
@@ -33,6 +34,10 @@ export async function create(req, res) {
     deadline || null, icon || 'piggy-bank', color || '#6366f1', notes || null, timestamp, timestamp
   );
 
+  if (accountId) {
+    await recomputeAccountBalance(accountId);
+  }
+
   const goal = await get('SELECT * FROM savings_goals WHERE id = ?', id);
   res.status(201).json(goal);
 }
@@ -56,6 +61,9 @@ export async function update(req, res) {
     isActive !== undefined ? (isActive ? 1 : 0) : null, timestamp, req.params.id
   );
 
+  if (existing.account_id) await recomputeAccountBalance(existing.account_id);
+  if (accountId !== undefined && accountId !== existing.account_id) await recomputeAccountBalance(accountId);
+
   const goal = await get('SELECT * FROM savings_goals WHERE id = ?', req.params.id);
   res.json(goal);
 }
@@ -64,6 +72,7 @@ export async function remove(req, res) {
   const existing = await get('SELECT * FROM savings_goals WHERE id = ?', req.params.id);
   if (!existing) return res.status(404).json({ error: 'Savings goal not found' });
   await run('DELETE FROM savings_goals WHERE id = ?', req.params.id);
+  if (existing.account_id) await recomputeAccountBalance(existing.account_id);
   res.json({ message: 'Savings goal deleted' });
 }
 
@@ -79,7 +88,7 @@ export async function addFunds(req, res) {
   await run('UPDATE savings_goals SET current_amount = ?, updated_at = ? WHERE id = ?', newAmount, timestamp, req.params.id);
 
   if (existing.account_id) {
-    await run('UPDATE accounts SET current_balance = current_balance - ?, updated_at = ? WHERE id = ?', amount, timestamp, existing.account_id);
+    await recomputeAccountBalance(existing.account_id);
   }
 
   res.json({ message: 'Funds added', currentAmount: newAmount });

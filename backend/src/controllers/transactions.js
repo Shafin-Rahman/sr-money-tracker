@@ -1,5 +1,6 @@
 import { get, all, run } from '../db/index.js';
 import { now, generateId } from '../utils/helpers.js';
+import { recomputeAccountBalance } from '../utils/balances.js';
 
 export async function list(req, res) {
   const { type, accountId, categoryId, startDate, endDate, page = 1, limit = 50 } = req.query;
@@ -107,6 +108,15 @@ export async function create(req, res) {
     return res.status(400).json({ error: 'Amount cannot be negative' });
   }
 
+  if (type === 'transfer') {
+    if (!toAccountId) {
+      return res.status(400).json({ error: 'Transfer requires a destination account' });
+    }
+    if (toAccountId === accountId) {
+      return res.status(400).json({ error: 'Source and destination account must be different' });
+    }
+  }
+
   const account = await get('SELECT * FROM accounts WHERE id = ?', accountId);
   if (!account) {
     return res.status(404).json({ error: 'Account not found' });
@@ -153,6 +163,21 @@ export async function update(req, res) {
   const { type, amount, accountId, toAccountId, categoryId, description,
     personName, personPhone, location, notes, date, time, tags: tagIds, isRemoved } = req.body;
 
+  if (amount !== undefined && amount !== null && Number(amount) < 0) {
+    return res.status(400).json({ error: 'Amount cannot be negative' });
+  }
+  const finalType = type || existing.type;
+  const finalFrom = accountId || existing.account_id;
+  const finalTo = toAccountId !== undefined ? toAccountId : existing.to_account_id;
+  if (finalType === 'transfer') {
+    if (!finalTo) {
+      return res.status(400).json({ error: 'Transfer requires a destination account' });
+    }
+    if (finalTo === finalFrom) {
+      return res.status(400).json({ error: 'Source and destination account must be different' });
+    }
+  }
+
   await run(`UPDATE transactions SET
     type = COALESCE(?, type),
     amount = COALESCE(?, amount),
@@ -185,11 +210,14 @@ export async function update(req, res) {
     }
   }
 
-  const oldAccountId = existing.account_id;
-  const newAccountId = accountId || existing.account_id;
-  await updateAccountBalance(oldAccountId);
-  if (newAccountId !== oldAccountId) {
-    await updateAccountBalance(newAccountId);
+  const oldFrom = existing.account_id;
+  const newFrom = accountId || existing.account_id;
+  const oldTo = existing.to_account_id;
+  const newTo = toAccountId !== undefined ? toAccountId : existing.to_account_id;
+
+  const affected = new Set([oldFrom, newFrom, oldTo, newTo].filter(Boolean));
+  for (const id of affected) {
+    await updateAccountBalance(id);
   }
 
   const transaction = await get(`SELECT t.*, a.name as account_name,
@@ -210,7 +238,10 @@ export async function remove(req, res) {
   }
 
   await run('UPDATE transactions SET is_removed = 1, updated_at = ? WHERE id = ?', now(), req.params.id);
-  await updateAccountBalance(existing.account_id);
+  const affected = [existing.account_id, existing.to_account_id].filter(Boolean);
+  for (const id of affected) {
+    await updateAccountBalance(id);
+  }
 
   res.json({ message: 'Transaction removed successfully' });
 }
@@ -238,30 +269,15 @@ export async function duplicate(req, res) {
     await run('INSERT INTO transaction_tags (id, transaction_id, tag_id) VALUES (?, ?, ?)', generateId(), newId, t.tag_id);
   }
 
-  await updateAccountBalance(existing.account_id);
+  const affected = [existing.account_id, existing.to_account_id].filter(Boolean);
+  for (const id of affected) {
+    await updateAccountBalance(id);
+  }
 
   const transaction = await get('SELECT * FROM transactions WHERE id = ?', newId);
   res.status(201).json(transaction);
 }
 
 async function updateAccountBalance(accountId) {
-  const result = await get(`
-    SELECT
-      COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
-      COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expense,
-      COALESCE(SUM(CASE WHEN type = 'transfer' AND account_id = ? THEN amount ELSE 0 END), 0) as total_transfer_out,
-      COALESCE(SUM(CASE WHEN type = 'transfer' AND to_account_id = ? THEN amount ELSE 0 END), 0) as total_transfer_in,
-      COALESCE(SUM(CASE WHEN type = 'loan_received' THEN amount ELSE 0 END), 0) as total_loan_in,
-      COALESCE(SUM(CASE WHEN type = 'loan_given' THEN amount ELSE 0 END), 0) as total_loan_out
-    FROM transactions
-    WHERE (account_id = ? OR to_account_id = ?) AND is_removed = 0
-  `, accountId, accountId, accountId, accountId);
-
-  const account = await get('SELECT opening_balance FROM accounts WHERE id = ?', accountId);
-
-  const balance = account.opening_balance +
-    result.total_income + result.total_transfer_in + result.total_loan_in -
-    (result.total_expense + result.total_transfer_out + result.total_loan_out);
-
-  await run('UPDATE accounts SET current_balance = ?, updated_at = ? WHERE id = ?', balance, now(), accountId);
+  await recomputeAccountBalance(accountId);
 }

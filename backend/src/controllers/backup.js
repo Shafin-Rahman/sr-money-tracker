@@ -1,6 +1,7 @@
 import { all, withTransaction } from '../db/index.js';
 import { now } from '../utils/helpers.js';
 import { TABLES } from '../db/tables.js';
+import { recomputeAllBalances } from '../utils/balances.js';
 
 // children-first so foreign keys are satisfied
 const DELETE_ORDER = [
@@ -47,6 +48,7 @@ export async function importData(req, res) {
       }
     });
 
+    await recomputeAllBalances();
     res.json({ message: 'Data imported successfully', importedAt: now() });
   } catch (err) {
     res.status(500).json({ error: 'Import failed', message: err.message });

@@ -1,5 +1,6 @@
 import { get, all, run } from '../db/index.js';
 import { now, generateId } from '../utils/helpers.js';
+import { recomputeAccountBalance } from '../utils/balances.js';
 
 export async function list(req, res) {
   const { type, status } = req.query;
@@ -57,6 +58,10 @@ export async function create(req, res) {
     amount, amount, accountId || null, dueDate || null, notes || null, timestamp, timestamp
   );
 
+  if (accountId) {
+    await recomputeAccountBalance(accountId);
+  }
+
   const loan = await get('SELECT * FROM loans WHERE id = ?', id);
   res.status(201).json(loan);
 }
@@ -88,7 +93,11 @@ export async function update(req, res) {
 
   const totalPaid = await get('SELECT COALESCE(SUM(amount), 0) as total FROM loan_payments WHERE loan_id = ?', req.params.id);
   const loanAmount = amount || existing.amount;
-  await run('UPDATE loans SET remaining_amount = ? WHERE id = ?', loanAmount - totalPaid.total, req.params.id);
+  await run('UPDATE loans SET remaining_amount = ?, paid_amount = ? WHERE id = ?', loanAmount - totalPaid.total, totalPaid.total, req.params.id);
+
+  if (existing.account_id) {
+    await recomputeAccountBalance(existing.account_id);
+  }
 
   const loan = await get('SELECT * FROM loans WHERE id = ?', req.params.id);
   res.json(loan);
@@ -103,6 +112,10 @@ export async function remove(req, res) {
 
   await run('DELETE FROM loan_payments WHERE loan_id = ?', req.params.id);
   await run('DELETE FROM loans WHERE id = ?', req.params.id);
+
+  if (existing.account_id) {
+    await recomputeAccountBalance(existing.account_id);
+  }
 
   res.json({ message: 'Loan deleted successfully' });
 }
@@ -131,18 +144,8 @@ export async function addPayment(req, res) {
   const newStatus = remaining <= 0 ? 'paid' : 'active';
   await run('UPDATE loans SET paid_amount = ?, remaining_amount = ?, status = ?, updated_at = ? WHERE id = ?', totalPaid.total, remaining, newStatus, timestamp, req.params.id);
 
-  if (loan.type === 'lent' && loan.account_id) {
-    const account = await get('SELECT * FROM accounts WHERE id = ?', loan.account_id);
-    if (account) {
-      await run('UPDATE accounts SET current_balance = current_balance + ?, updated_at = ? WHERE id = ?', amount, timestamp, loan.account_id);
-    }
-  }
-
-  if (loan.type === 'borrowed' && loan.account_id) {
-    const account = await get('SELECT * FROM accounts WHERE id = ?', loan.account_id);
-    if (account) {
-      await run('UPDATE accounts SET current_balance = current_balance - ?, updated_at = ? WHERE id = ?', amount, timestamp, loan.account_id);
-    }
+  if (loan.account_id) {
+    await recomputeAccountBalance(loan.account_id);
   }
 
   const payment = await get('SELECT * FROM loan_payments WHERE id = ?', id);

@@ -30,6 +30,13 @@ export async function push(req, res) {
         const allowedColumns = TABLE_COLUMNS[op.table];
 
         if (op.op === 'delete') {
+          if (op.table === 'accounts') {
+            const removedTxns = await tx.all('SELECT id FROM transactions WHERE (account_id = ? OR to_account_id = ?) AND is_removed = 1', op.id, op.id);
+            for (const t of removedTxns) {
+              await tx.run('DELETE FROM transaction_tags WHERE transaction_id = ?', t.id);
+            }
+            await tx.run('DELETE FROM transactions WHERE (account_id = ? OR to_account_id = ?) AND is_removed = 1', op.id, op.id);
+          }
           await tx.run(`DELETE FROM ${op.table} WHERE id = ?`, op.id);
           continue;
         }

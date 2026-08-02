@@ -1,5 +1,6 @@
 import { get, all, run } from '../db/index.js';
 import { now, generateId } from '../utils/helpers.js';
+import { recomputeAccountBalance } from '../utils/balances.js';
 
 export async function list(req, res) {
   const includeArchived = req.query.include_archived === 'true';
@@ -51,7 +52,7 @@ export async function update(req, res) {
     return res.status(404).json({ error: 'Account not found' });
   }
 
-  const { name, type, icon, color, notes, isActive, isArchived, sortOrder } = req.body;
+  const { name, type, icon, color, notes, isActive, isArchived, sortOrder, openingBalance } = req.body;
 
   await run(`UPDATE accounts SET
     name = COALESCE(?, name),
@@ -59,6 +60,7 @@ export async function update(req, res) {
     icon = COALESCE(?, icon),
     color = COALESCE(?, color),
     notes = COALESCE(?, notes),
+    opening_balance = ?,
     is_active = COALESCE(?, is_active),
     is_archived = COALESCE(?, is_archived),
     sort_order = COALESCE(?, sort_order),
@@ -66,10 +68,13 @@ export async function update(req, res) {
     WHERE id = ?`,
     name || null, type || null, icon || null, color || null,
     notes !== undefined ? notes : null,
+    openingBalance !== undefined ? Number(openingBalance) : existing.opening_balance,
     isActive !== undefined ? (isActive ? 1 : 0) : null,
     isArchived !== undefined ? (isArchived ? 1 : 0) : null,
     sortOrder || null, timestamp, req.params.id
   );
+
+  await recomputeAccountBalance(req.params.id);
 
   const account = await get('SELECT * FROM accounts WHERE id = ?', req.params.id);
   res.json(account);
@@ -81,6 +86,21 @@ export async function remove(req, res) {
   if (!existing) {
     return res.status(404).json({ error: 'Account not found' });
   }
+
+  const txnCount = await get(`SELECT CAST(COUNT(*) AS INTEGER) as count FROM transactions
+    WHERE (account_id = ? OR to_account_id = ?) AND is_removed = 0`, req.params.id, req.params.id);
+  const loanCount = await get('SELECT CAST(COUNT(*) AS INTEGER) as count FROM loans WHERE account_id = ?', req.params.id);
+  const goalCount = await get('SELECT CAST(COUNT(*) AS INTEGER) as count FROM savings_goals WHERE account_id = ?', req.params.id);
+
+  if (txnCount.count > 0 || loanCount.count > 0 || goalCount.count > 0) {
+    return res.status(400).json({ error: 'Cannot delete an account that has transactions, loans or savings goals. Archive it instead.' });
+  }
+
+  const removedTxns = await all('SELECT id FROM transactions WHERE (account_id = ? OR to_account_id = ?) AND is_removed = 1', req.params.id, req.params.id);
+  for (const t of removedTxns) {
+    await run('DELETE FROM transaction_tags WHERE transaction_id = ?', t.id);
+  }
+  await run('DELETE FROM transactions WHERE (account_id = ? OR to_account_id = ?) AND is_removed = 1', req.params.id, req.params.id);
 
   await run('DELETE FROM accounts WHERE id = ?', req.params.id);
   res.json({ message: 'Account deleted successfully' });

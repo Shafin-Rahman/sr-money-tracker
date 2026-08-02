@@ -136,7 +136,10 @@ export async function cacheRows(table, rows) {
 }
 
 export async function enqueue(op) {
-  await promisify(tx('outbox', 'readwrite').add({
+  // `put` (not `add`) so re-editing the same record while a previous write is
+  // still pending in the outbox overwrites it (last-write-wins) instead of
+  // throwing "keys already exist in the object store".
+  await promisify(tx('outbox', 'readwrite').put({
     table: op.table,
     id: op.id,
     op: op.op,

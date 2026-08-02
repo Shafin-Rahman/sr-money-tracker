@@ -365,13 +365,20 @@ export async function exportAccountsCSV() {
 export async function recomputeBalances() {
   const d = await loadAll();
   const txns = visibleTransactions(d.transactions);
-  const loansByPayment = (d.loanPayments || []).map((p) => ({
-    payment: p,
-    loan: (d.loans || []).find((l) => l.id === p.loan_id),
-  }));
+  const now = nowISO();
+
+  // Canonical account balance:
+  //   opening_balance
+  //   + income          (money in)
+  //   - expense         (money out)
+  //   - transfer out / + transfer in
+  //   + loan_received / - loan_given transactions
+  //   + active borrowed remaining / - active lent remaining   (loan principal + repayments)
+  //   - savings_goals.current_amount                           (money reserved for goals)
+  const activeLoans = (d.loans || []).filter((l) => l.status === 'active');
+  const activeGoals = (d.savingsGoals || []).filter((g) => g.is_active === 1);
 
   const changed = [];
-  const now = nowISO();
 
   for (const acc of d.accounts) {
     let balance = acc.opening_balance || 0;
@@ -391,14 +398,13 @@ export async function recomputeBalances() {
       }
     }
 
-    for (const { payment, loan } of loansByPayment) {
-      if (loan && loan.account_id === acc.id) {
-        if (loan.type === 'lent') balance += payment.amount;
-        if (loan.type === 'borrowed') balance -= payment.amount;
-      }
+    for (const loan of activeLoans) {
+      if (loan.account_id !== acc.id) continue;
+      if (loan.type === 'lent') balance -= loan.remaining_amount || 0;
+      if (loan.type === 'borrowed') balance += loan.remaining_amount || 0;
     }
 
-    for (const goal of d.savingsGoals || []) {
+    for (const goal of activeGoals) {
       if (goal.account_id === acc.id) balance -= goal.current_amount || 0;
     }
 
@@ -412,4 +418,41 @@ export async function recomputeBalances() {
   }
 
   return changed;
+}
+
+// Spending window used for budget progress. For ongoing budgets (no end date)
+// the window is clamped to the CURRENT calendar period, otherwise a budget
+// would keep accumulating spending forever and never reset.
+export function budgetWindow(budget, nowDate) {
+  const now = nowDate || today();
+  if (budget.end_date) {
+    return { start: budget.start_date || '0001-01-01', end: budget.end_date };
+  }
+  const start = budget.start_date || '0001-01-01';
+  const period = budget.period || 'monthly';
+
+  if (period === 'daily') return { start: now, end: now };
+  if (period === 'weekly') {
+    const d = new Date(`${now}T00:00:00`);
+    const day = d.getDay();
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - ((day + 6) % 7));
+    const from = toDateStr(monday);
+    return { start: from > start ? from : start, end: now };
+  }
+  if (period === 'monthly') {
+    const from = now.substring(0, 7) + '-01';
+    return { start: from > start ? from : start, end: now };
+  }
+  if (period === 'yearly') {
+    const from = now.substring(0, 4) + '-01-01';
+    return { start: from > start ? from : start, end: now };
+  }
+  return { start, end: now };
+}
+
+function toDateStr(d) {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
 }

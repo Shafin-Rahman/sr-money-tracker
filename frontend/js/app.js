@@ -308,14 +308,8 @@ function initKeyboard() {
   });
 }
 
-// Modal overlay click to close
+// Modal close (explicit only — no backdrop-click dismissal)
 function initModal() {
-  document.getElementById('modalOverlay').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) {
-      window.closeModal();
-    }
-  });
-
   document.getElementById('modalClose').addEventListener('click', window.closeModal);
 }
 

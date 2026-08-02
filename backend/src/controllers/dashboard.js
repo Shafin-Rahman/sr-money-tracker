@@ -24,7 +24,7 @@ export async function getSummary(req, res) {
     WHERE t.is_removed = 0
     ORDER BY t.date DESC, t.created_at DESC LIMIT 10`);
 
-  const upcomingBills = await get("SELECT * FROM recurring_bills WHERE is_active = 1 AND next_date >= ? ORDER BY next_date ASC LIMIT 5", currentDate);
+  const upcomingBills = await all("SELECT * FROM recurring_bills WHERE is_active = 1 AND next_date >= ? ORDER BY next_date ASC LIMIT 5", currentDate);
 
   const accountBalances = await all("SELECT id, name, type, icon, color, current_balance FROM accounts WHERE is_archived = 0 ORDER BY sort_order ASC");
 
